@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "multirat"
+version = "0.1.0"
+description = "Code for multi-compartment simulations of tracer clearance in the ratbrain."
+authors = ["jorgenriseth <jnriseth@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+jupyter = "^1.0.0"
+numpy = "^1.22.3"
+matplotlib = "^3.5.1"
+meshio = "^5.3.4"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

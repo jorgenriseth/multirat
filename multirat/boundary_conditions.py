@@ -1,15 +1,15 @@
 from .parameters import PARAMS
-import skallaflow as sf
+from multirat.base.boundary import DirichletBoundary
 from dolfin import Constant, FacetNormal, Measure, assemble, inner, grad, exp
 
 
-class HomogeneousDirichletBoundary(sf.DirichletBoundary):
+class HomogeneousDirichletBoundary(DirichletBoundary):
     def __init__(self):
         super().__init__(Constant(0.), "everywhere")
 
 
-# TODO: Add scaling directly in parameters-file
-class TracerODEBoundary(sf.DirichletBoundary):
+# TODO: Add scaling directly in parameters-file?
+class TracerODEBoundary(DirichletBoundary):
     def __init__(self):
         self.g = Constant(0.)
         super().__init__(self.g, "everywhere")

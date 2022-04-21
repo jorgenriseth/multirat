@@ -1,5 +1,6 @@
-import skallaflow as sf
-from .computers import BaseComputer
+from multirat.computers import BaseComputer
+from multirat.problems import BaseDiffusionProblem
+from multirat.base.timeseriesstorage import TimeSeriesStorage
 
 
 def print_progress(time):
@@ -7,12 +8,12 @@ def print_progress(time):
     print(f"[{'=' * progress}{' ' * (20 - progress)}] {time.t / 60:>6.1f}min / {time.T / 60:<5.1f}min", end='\r')
 
 
-def solve_diffusion_problem(problem, results_path, computer=None):
+def solve_diffusion_problem(problem: BaseDiffusionProblem, results_path, computer=None):
     if computer is None:
         computer = BaseComputer({})
 
     problem.init_solver()
-    storage = sf.TimeSeriesStorage("w", results_path, mesh=problem.domain.mesh, V=problem.V)
+    storage = TimeSeriesStorage("w", results_path, mesh=problem.domain.mesh, V=problem.V)
     storage.write(problem.u, problem.time.t)
     computer.initiate(problem)
 

@@ -1,9 +1,9 @@
-import skallaflow as sf
-from dolfin import (Function, TestFunction, TrialFunction, Measure)
-from dolfin import (assemble, dx, inner, grad, solve)
+from dolfin import Function, TestFunction, TrialFunction
+from dolfin import assemble, dx, inner, grad, solve
 
-from .parameters import PARAMS
-from .boundary_conditions import TracerConservationBoundary, TracerDecayBoundary, HomogeneousDirichletBoundary
+from multirat.base.boundary import process_dirichlet, process_boundary_forms
+from multirat.parameters import PARAMS
+from multirat.boundary_conditions import TracerConservationBoundary, TracerDecayBoundary, HomogeneousDirichletBoundary
 
 
 class BaseDiffusionProblem:
@@ -34,8 +34,8 @@ class BaseDiffusionProblem:
         self.u.assign(self.u0)
 
     def process_boundaries(self, boundaries):
-        self.bcs = sf.process_dirichlet(self.domain, self.V, boundaries)
-        self.L += sf.process_boundary_forms(self.domain, self.V, boundaries)
+        self.bcs = process_dirichlet(self.domain, self.V, boundaries)
+        self.L += process_boundary_forms(self.domain, self.V, boundaries)
 
     def pre_solve(self):
         pass
