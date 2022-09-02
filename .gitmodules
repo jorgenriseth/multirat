@@ -1,0 +1,6 @@
+[submodule "deps/pantarei"]
+	path = deps/pantarei
+	url = https://github.com/jorgenriseth/pantarei.git
+[submodule "deps/SVMTK"]
+	path = deps/SVMTK
+	url = https://github.com/SVMTK/SVMTK.git
