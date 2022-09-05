@@ -105,7 +105,6 @@ class TimeSeriesStorage:
     def __iter__(self):
         for i in range(len(self)):
             # u = Function(self.V)
-
             self.hdf5.read(self.u.vector(), f"/values_{i}", True)
             yield self.u
 

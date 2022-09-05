@@ -1,0 +1,9 @@
+name: ratbrain
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - fenics-dolfin
+  - numpy
+  - matplotlib
+  - jupyter
