@@ -2,3 +2,5 @@
 *.ipynb_checkpoints
 __pycache__
 mesh/*.h5
+results
+!results/.keep

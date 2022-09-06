@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from argparse import ArgumentParser
 from pathlib import Path
-from pantarei.meshprocessing import stl2hdf
+from multirat.base.meshprocessing import stl2hdf
 import SVMTK
 
 
