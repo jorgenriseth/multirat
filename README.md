@@ -17,6 +17,7 @@ Notes for future packaging with installation of dependencies:
 ```
 conda create -n multirat -c conda-forge fenics matplotlib jupyter
 conda activate multirat
+pip install h5py
 pip install meshio
 pip install git+https://github.com/SVMTK/SVMTK.git
 pip install -e . 
