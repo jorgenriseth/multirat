@@ -34,6 +34,7 @@ PARAMS = {
     "porosity-arteries": 0.00658,
     "porosity-capillaries": 0.00329,
     "porosity-veins": 0.02303,
+    "diffusion_constant": 1.03e-4,  # mm^2/s
     "diffusion_inulin_eff-all": 1.03e-4,  # mm^2/s
     "diffusion_inulin_free-all": 2.98e-4,  # mm^2/s
     "diffusion_ab_eff-all": 1.6236e-4,  # mm^2/s
