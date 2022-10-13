@@ -4,6 +4,12 @@ Main code is in the notebooks
 1. Simulation Notebook
 2. Visualization and Measurement
 
+# Setup
+## Conda
+```
+conda create -n environment.yml
+pip install -e . 
+```
 
 ## Installation
 ```
