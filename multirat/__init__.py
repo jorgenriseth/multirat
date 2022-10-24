@@ -10,5 +10,3 @@
 # from multirat.base.projectors import HomogeneousDirichletProjector
 
 # from multirat.config import *
-
-
