@@ -19,11 +19,9 @@ minute = ureg.min
 mL = ureg.mL
 
 
+# Dictionary defining various subsets of the compartments and interfaces which 
+# either share a parameter, or use the same functions to compute parameters.
 SHARED_PARAMETERS = {
-    "pvs": ["pvs_arteries", "pvs_capillaries", "pvs_veins"],
-    "csf": ["ecs", "pvs_arteries", "pvs_capillaries", "pvs_veins"],
-    "blood": ["arteries", "capillaries", "veins"],
-    "large_vessels": ["arteries", "veins"],
     "all": [
         "ecs",
         "pvs_arteries",
@@ -33,22 +31,52 @@ SHARED_PARAMETERS = {
         "capillaries",
         "veins",
     ],
+    "pvs": ["pvs_arteries", "pvs_capillaries", "pvs_veins"],
+    "csf": ["ecs", "pvs_arteries", "pvs_capillaries", "pvs_veins"],
+    "blood": ["arteries", "capillaries", "veins"],
+    "large_vessels": ["arteries", "veins"],
     "bbb": [
         ("pvs_arteries", "arteries"),
         ("pvs_capillaries", "capillaries"),
         ("pvs_veins", "veins"),
     ],
     "aef": [("ecs", "pvs_arteries"), ("ecs", "pvs_capillaries"), ("ecs", "pvs_veins")],
+    "membranes": [
+        ("pvs_arteries", "arteries"),
+        ("pvs_capillaries", "capillaries"),
+        ("pvs_veins", "veins"),
+        ("ecs", "pvs_arteries"),
+        ("ecs", "pvs_capillaries"),
+        ("ecs", "pvs_veins")
+    ],
+    "connected" : [
+        ("pvs_arteries", "pvs_capillaries"),
+        ("pvs_capillaries", "pvs_veins"),
+        ("arteries", "capillaries"),
+        ("capillaries", "veins"),
+    ],
+    "connected_blood": [
+        ("arteries", "capillaries"),
+        ("capillaries", "veins"),
+    ],
+    "connected_pvs": [
+        ("pvs_arteries", "pvs_capillaries"),
+        ("pvs_capillaries", "pvs_veins"),
+    ]
 }
 
+# Dictionary containing parameters with values found in literature, or values for which
+# we have just assumed some value. All other parameters should be derived from these.
 BASE_PARAMETERS = {
     "brain_volume": 2450.0 * mm**3,
+    "csf_volume_fraction": 0.12, # 
     "human_brain_volume": 1.0e6 * mm**3,
+    "human_brain_surface_area": 1.750e2 * mm**2,
     "diffusion_coefficient_free": {
-        "inulin": 2.98 * mm**2 / s,
-        "amyloid_beta": 1.8 * mm**2 / s,
+        "inulin": 2.98e-4 * mm**2 / s,
+        "amyloid_beta": 1.8e-4 * mm**2 / s,
     },
-    "boundary_pressure": {
+    "pressure_boundary": {
         "arteries": 120.0 * mmHg,
         "veins": 7.0 * mmHg,
         "pvs_arteries": 4.74 * mmHg,
@@ -63,7 +91,10 @@ BASE_PARAMETERS = {
         "csf": 0.2,  # # Osm. press. computed as this constat * osmotic_pressure-blood
     },
     "osmotic_reflection": {
-        "all": 0.2
+        "inulin": {
+            "membranes": 0.2,
+            "connected": 1.0,
+        }
     },
     "porosity": {
         "ecs": 0.14,
@@ -72,7 +103,7 @@ BASE_PARAMETERS = {
     "vasculature_fraction": {
         "arteries": 0.2,
         "capillaries": 0.1,
-        "veins": 0.3,
+        "veins": 0.7,
     },
     "pvs_volume_fraction": 0.003,
     "viscosity": {
@@ -91,7 +122,8 @@ BASE_PARAMETERS = {
         ("ecs", "veins"): 3.0 / mm,
     },
     "flowrate": {
-        "blood": 700 * mL / minute,
+        "blood": 2.4 * mL / minute,
+#         "blood": 700 * mL / minute, # human?
         "csf": 3.33 * mm**3 / s,
     },
     "pressure_drop": {
@@ -106,6 +138,8 @@ BASE_PARAMETERS = {
         "pvs_arteries": 1.14 * mmHg / (mL / minute),
         "pvs_capillaries": 32.4 * mmHg / (mL / minute),
         "pvs_veins": 1.75e-3 * mmHg / (mL / minute),
+    },
+    "resistance_interface": {
         ("ecs", "arteries"): 0.57 * mmHg / (mL / minute),
         ("ecs", "capillaries"): 125.31 * mmHg / (mL / minute),  # FIXME: Wrong value
         ("ecs", "veins"): 0.64 * mmHg / (mL / minute),
@@ -116,9 +150,10 @@ BASE_PARAMETERS = {
         "veins": 50.0 * um,
     },
     "solute_radius": {
-        "inulin": 15.2e-7 * mm,  # Sauce? (1.52 nm?)
+        "inulin": 15.2e-7 * mm,  # Sauce?
         "amyloid_beta": 0.9 * nm,
     },
+    # Related to permeability of BBB. Since this work is restricted to inulin, only AEF is of interest.
     "membranes": {
         "layertype": {
             "glycocalyx": "fiber",
@@ -173,6 +208,11 @@ def get_base_parameters():
     """Return a copy of the BASE_PARAMETERS, containing parameter values explicitly found in literature.
     Based on these values remaining paramters will be computed."""
     return {**BASE_PARAMETERS}
+
+def get_shared_parameters():
+    """Return a copy of the BASE_PARAMETERS, containing parameter values explicitly found in literature.
+    Based on these values remaining paramters will be computed."""
+    return {**SHARED_PARAMETERS}
 
 
 def unpack_shared_parameter(subdict: Dict, labels: List[str]):
@@ -350,3 +390,4 @@ def get_interface_parameter(param, compartments):
         else:
             out[(i, j)] = out[(j, i)] = 0.0
     return out
+
