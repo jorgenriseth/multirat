@@ -34,7 +34,7 @@ class TimeSeriesStorage:
         self.V = V
 
         # Create directory, value-file and xdmf file for paraview visualization.
-        self.filepath.mkdir(exist_ok=True)
+        self.filepath.mkdir(exist_ok=True, parents=True)
 
         hdffile, xdmffile, infofile = (
             self.filepath / file for file in ("values.hdf5", "visual.xdmf", "info.pkl")
@@ -126,7 +126,7 @@ class TimeSeriesStorage:
     def __len__(self):
         return self.idx
 
-    def to_xdmf(self, names: Union[str, Tuple[str]]):
+    def to_xdmf(self, names: Union[str, List[str]]):
         xdmfs = {
             name: XDMFFile(
                 self.mesh.mpi_comm(), str(self.filepath / "visual_{}.xdmf".format(name))

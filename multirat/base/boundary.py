@@ -35,11 +35,14 @@ class VariationalBoundary(BoundaryData):
     def variational_boundary_form(self, n, v, ds):
         pass
 
-    def process(self, domain, space):
-        v = TestFunction(space)
+    def process(self, test, domain, space):
+        # v = TestFunction(space)
         n = FacetNormal(domain.mesh)
-        ds = Measure("ds", domain=domain.mesh, subdomain_data=domain.boundaries)
-        return self.variational_boundary_form(n, v, ds)
+        if domain.boundaries is None:
+            ds = Measure("ds", domain=domain.mesh)
+        else:
+            ds = Measure("ds", domain=domain.mesh, subdomain_data=domain.boundaries)
+        return self.variational_boundary_form(n, , ds)
 
 
 class TractionBoundary(VariationalBoundary):
@@ -55,5 +58,13 @@ def process_dirichlet(domain, space, boundaries):
     return [bc.process(domain, space) for bc in boundaries if isinstance(bc, DirichletBoundary)]
 
 
-def process_boundary_forms(domain, space, boundaries):
-    return sum([bc.process(domain, space) for bc in boundaries if isinstance(bc, VariationalBoundary)])
+def process_boundary_forms(test, domain, space, boundaries):
+    return sum([bc.process(test, domain, space) for bc in boundaries if isinstance(bc, VariationalBoundary)])
+
+
+class RobinBoundary(VariationalBoundary):
+    def __init__(self, ):
+        pass
+
+    def variational_boundary_form(self, n, v, ds):
+        return 
