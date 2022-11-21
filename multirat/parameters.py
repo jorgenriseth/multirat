@@ -59,6 +59,10 @@ SHARED_PARAMETERS = {
         ("pvs_arteries", "pvs_capillaries"),
         ("pvs_capillaries", "pvs_veins"),
     ],
+    "disconnected": [
+        ("ecs", "arteries"), ("ecs", "capillaries"), ("ecs", "veins"),
+        ("arteries", "veins"), ("pvs_arteries", "pvs_veins")
+    ]
 }
 
 # Dictionary containing parameters with values found in literature, or values for which
@@ -179,6 +183,7 @@ PARAMETER_UNITS = {
     "permeability": "mm**2",
     "viscosity": "Pa * s",
     "porosity": "",
+    "hydraulic_conductivity": "mm ** 2 / (Pa * s)",
     "convective_fluid_transfer": "1 / (Pa * s)",
     "osmotic_pressure": "Pa",
     "osmotic_reflection": "",
@@ -262,27 +267,40 @@ def make_dimless(params):
 def convert_to_units(params, param_units):
     """Converts all quantities to the units specified by
     param_units."""
-    dimless = {}
+    converted = {}
     for key, val in params.items():
         if isinstance(val, dict):
-            dimless[key] = convert_to_units(val, param_units[key])
+            converted[key] = convert_to_units(val, param_units[key])
         elif isinstance(val, Quantity):
-            dimless[key] = val.to(param_units)
+            converted[key] = val.to(param_units)
         else:
-            dimless[key] = val
-    return dimless
+            converted[key] = val
+    return converted
 
 
 def symmetric(param, compartments):
     out = {}
     for i, j in combinations(compartments, 2):
-        if (i, j) in param:
+        if (i, j) in param and (j, i) not in param:
             out[(i, j)] = param[(i, j)]
-        elif (j, i) in param:
+            out[(j, i)] = param[(i, j)]
+        elif (j, i) in param and (i, j) not in param:
             out[(i, j)] = param[(j, i)]
+            out[(j, i)] = param[(j, i)]
         else:
-            raise KeyError(f"Neither {(i, j)} or {(j, i)} in param")
+            raise KeyError(f"Either both {(i, j)} and  {(j, i)} exists in params, or neither.")
     return out
+
+
+def symmetrize(params, compartments, *args):
+    out = {**params}
+    for param in args:
+        out[param] = symmetric(params[param], compartments)
+    return out
+
+
+def to_constant(param, *args):
+    return tuple(param[x] for x in args)
 
 
 def get_effective_diffusion(params, solute):
@@ -325,6 +343,20 @@ def get_permeabilities(p):
     return {key: val.to("mm^2") for key, val in k.items()}
 
 
+def get_hydraulic_conductivity(params):
+    K_base = params["hydraulic_conductivity"]
+    K = {}
+    for vi in SHARED_PARAMETERS["blood"]:
+        K[vi] = K_base[vi]
+    
+    k = get_permeabilities(params)
+    mu = params["viscosity"] 
+    for j in SHARED_PARAMETERS["csf"]:
+        K[j] = k[j] / mu[j]
+    
+    return K
+
+
 def get_convective_fluid_transfer(params):
     T = {}
     V = params["human_brain_volume"]
@@ -354,6 +386,8 @@ def get_convective_fluid_transfer(params):
         T[(pvs(vi), pvs(vj))] = compute_connected_fluid_transfer(
             V, Q["csf"], dp[(pvs(vi), pvs(vj))]
         )
+    for i, j in SHARED_PARAMETERS["disconnected"]:
+        T[(i, j)] = 0.0  * 1 / (Pa * s)
     return {key: val.to(1 / (Pa * s)) for key, val in T.items()}
 
 
@@ -387,6 +421,9 @@ def get_osmotic_reflection(params, solute):
     for interface in SHARED_PARAMETERS["connected"]:
         # TODO: Verify correctness here as well.
         sigma[interface] = params["osmotic_reflection"][solute]["connected"]
+
+    for interface in SHARED_PARAMETERS["disconnected"]:
+        sigma[interface] = 0.0
     return sigma
 
 
@@ -408,7 +445,6 @@ def diffusive_permeabilities_inulin(params):
     # Assume purely convection-driven transport between connected compartments.
     for i, j in SHARED_PARAMETERS["connected"]:
         P[(i, j)] = 0.0 * mm / s
-
     return {key: val.to("mm / s") for key, val in P.items()}
 
 
@@ -447,6 +483,8 @@ def get_diffusive_solute_transfer_inulin(params):
     for vi in SHARED_PARAMETERS["blood"]:
         L[("ecs", pvs(vi))] = P[("ecs", pvs(vi))] * surf_volume_ratio[("ecs", vi)]
         L[(pvs(vi), vi)] = P[(pvs(vi), vi)] * surf_volume_ratio[("ecs", vi)]
+    for i, j in [*SHARED_PARAMETERS["connected"], *SHARED_PARAMETERS["disconnected"]]:
+        L[(i, j)] = 0.0  * 1 / s
     return {key: val.to(1 / (s)) for key, val in L.items()}
 
 
@@ -473,6 +511,7 @@ def compute_parameters(params):
         "permeability": get_permeabilities(params),
         "viscosity": params["viscosity"],
         "porosity": get_porosities(params),
+        "hydraulic_conductivity": get_hydraulic_conductivity(params),
         "convective_fluid_transfer": get_convective_fluid_transfer(params),
         "osmotic_pressure": get_osmotic_pressure(params),
         "osmotic_reflection": get_osmotic_reflection(params, "inulin"),
