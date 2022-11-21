@@ -1,5 +1,5 @@
 import numbers
-from itertools import permutations
+from itertools import combinations
 
 from numpy import exp, sqrt, pi
 from pint import Quantity, UnitRegistry
@@ -7,6 +7,7 @@ from pint import Quantity, UnitRegistry
 # Define units
 ureg = UnitRegistry()
 mmHg = ureg.mmHg
+kg = ureg.kg
 Pa = ureg.Pa
 m = ureg.m
 mm = ureg.mm
@@ -20,7 +21,7 @@ mL = ureg.mL
 # Dictionary defining various subsets of the compartments and interfaces which
 # either share a parameter, or use the same functions to compute parameters.
 SHARED_PARAMETERS = {
-    "all": [  # ## General Diffusive Permeabilities (for e.g. amyloid beta)
+    "all": [
         "ecs",
         "pvs_arteries",
         "pvs_capillaries",
@@ -63,7 +64,7 @@ SHARED_PARAMETERS = {
 # Dictionary containing parameters with values found in literature, or values for which
 # we have just assumed some value. All other parameters should be derived from these.
 BASE_PARAMETERS = {
-    "brain_volume": 2450.0 * mm ** 3,
+    "brain_volume": 2311.0 * mm ** 3,
     "csf_volume_fraction": 0.12,  #
     "human_brain_volume": 1.0e6 * mm ** 3,
     "human_brain_surface_area": 1.750e2 * mm ** 2,
@@ -72,7 +73,7 @@ BASE_PARAMETERS = {
         "amyloid_beta": 1.8e-4 * mm ** 2 / s,
     },
     "pressure_boundary": {
-        "arteries": 120.0 * mmHg,
+        "arteries": 60.0 * mmHg,
         "veins": 7.0 * mmHg,
         "pvs_arteries": 4.74 * mmHg,
         "pvs_veins": 3.36 * mmHg,
@@ -81,16 +82,19 @@ BASE_PARAMETERS = {
     "tortuosity": 1.7,
     "osmotic_pressure": {"blood": 20.0 * mmHg},
     "osmotic_pressure_fraction": {
-        "csf": 0.2  # # Osm. press. computed as this constat * osmotic_pressure-blood
+        "csf": 0.2  # # Osm. press. computed as this constant * osmotic_pressure-blood
     },
     "osmotic_reflection": {"inulin": {"membranes": 0.2, "connected": 0.0}},
     "porosity": {"ecs": 0.14},
     "vasculature_volume_fraction": 0.0329,
     "vasculature_fraction": {"arteries": 0.2, "capillaries": 0.1, "veins": 0.7},
     "pvs_volume_fraction": 0.003,
-    "viscosity": {"blood": 2.67e-3 * Pa * s, "csf": 7.0e-4 * Pa * s},
+    "viscosity": {"blood": 2.67e-3 * Pa * s, "csf": 8.3e-4 * Pa * s},
     "permeability": {"ecs": 2.0e-11 * mm ** 2},
     "hydraulic_conductivity": {
+        "arteries": 1.234 * mm**3 * s / kg,
+        "capillaries": 4.28e-4 * mm**3 * s / kg,
+        "veins": 2.468 * mm**3 * s / kg,
         ("ecs", "arteries"): 9.1e-10 * mm / (Pa * s),
         ("ecs", "capillaries"): 1.0e-10 * mm / (Pa * s),
         ("ecs", "veins"): 2.0e-11 * mm / (Pa * s),
@@ -102,29 +106,28 @@ BASE_PARAMETERS = {
     },
     "flowrate": {
         "blood": 2.4 * mL / minute,
-        #         "blood": 700 * mL / minute, # human?
         "csf": 3.33 * mm ** 3 / s,
     },
     "pressure_drop": {
-        ("arteries", "capillaries"): 50.0 * mmHg,
-        ("capillaries", "veins"): 10.0 * mmHg,
+        ("arteries", "capillaries"): 40.0 * mmHg,
+        ("capillaries", "veins"): 13.0 * mmHg,
         ("pvs_arteries", "pvs_capillaries"): 1.0 * mmHg,
         ("pvs_capillaries", "pvs_veins"): 0.25 * mmHg,
-        ("c_prox", "c_dist"): 60.0 * mmHg,
     },
     "resistance": {
-        "ecs": 4.56 * Pa * s / mm ** 3,
+        "ecs": 0.57 * mmHg / (mL / minute),
         "pvs_arteries": 1.14 * mmHg / (mL / minute),
         "pvs_capillaries": 32.4 * mmHg / (mL / minute),
         "pvs_veins": 1.75e-3 * mmHg / (mL / minute),
     },
     "resistance_interface": {
-        ("ecs", "arteries"): 0.57 * mmHg / (mL / minute),
-        ("ecs", "capillaries"): 125.31 * mmHg / (mL / minute),  # FIXME: Wrong value
-        ("ecs", "veins"): 0.64 * mmHg / (mL / minute),
+        ("ecs", "pvs_arteries"): 0.57 * mmHg / (mL / minute),
+        ("ecs", "pvs_veins"): 0.64 * mmHg / (mL / minute),
+        ("pvs_capillaries", "capillaries"): 125.31 * mmHg / (mL / minute),
     },
     "diameter": {"arteries": 50.0 * um, "capillaries": 10.0 * um, "veins": 50.0 * um},
-    "solute_radius": {"inulin": 15.2e-7 * mm, "amyloid_beta": 0.9 * nm},  # Sauce?
+    "solute_radius": {"inulin": 15.2e-7 * mm, "amyloid_beta": 0.9 * nm}, 
+    ###################################################################
     # Related to permeability of BBB. Since this work is restricted to inulin, only AEF is of interest.
     "membranes": {
         "layertype": {
@@ -179,7 +182,7 @@ PARAMETER_UNITS = {
     "permeability": "mm**2",
     "viscosity": "Pa * s",
     "porosity": "",
-    "convective_fluid_transfer": "1 / (Pa * h)",
+    "convective_fluid_transfer": "1 / (Pa * s)",
     "osmotic_pressure": "Pa",
     "osmotic_reflection": "",
     "diffusive_solute_transfer": "1 / s",
@@ -246,34 +249,43 @@ def distribute_subset_parameters(base, subsets=None):
     return extended
 
 
-def make_dimless(params, param_units):
-    """Converts all quantities to the units specified by
-    param_units, before converting it to a dimless number."""
+def make_dimless(params):
+    """Converts all quantities to a dimless number."""
     dimless = {}
     for key, val in params.items():
         if isinstance(val, dict):
-            dimless[key] = make_dimless(val, param_units[key])
+            dimless[key] = make_dimless(val)
         elif isinstance(val, Quantity):
-            dimless[key] = val.to(param_units).magnitude
+            dimless[key] = val.magnitude
         else:
             dimless[key] = val
     return dimless
 
 
-def get_interface_parameter(param, compartments, is_symmetric=False):
-    """Create a dictionary with entries for each permutation of 
-    two compartments. Entries which are not present will either be
-    set to zero, or to the mirrored value if the parameter is symmetric."""
+def convert_to_units(params, param_units):
+    """Converts all quantities to the units specified by
+    param_units."""
+    dimless = {}
+    for key, val in params.items():
+        if isinstance(val, dict):
+            dimless[key] = convert_to_units(val, param_units[key])
+        elif isinstance(val, Quantity):
+            dimless[key] = val.to(param_units)
+        else:
+            dimless[key] = val
+    return dimless
+
+
+def symmetric(param, compartments):
     out = {}
-    for i, j in permutations(compartments, 2):
+    for i, j in combinations(compartments, 2):
         if (i, j) in param:
             out[(i, j)] = param[(i, j)]
-        elif (j, i) in param and is_symmetric:
+        elif (j, i) in param:
             out[(i, j)] = param[(j, i)]
         else:
-            out[(i, j)] = out[(i, j)] = 0.0
+            raise KeyError(f"Neither {(i, j)} or {(j, i)} in param")
     return out
-
 
 def get_effective_diffusion(params, solute):
     Dfree = params["diffusion_coefficient_free"][solute]
@@ -298,50 +310,47 @@ def get_viscosities(params):
 
 
 def get_resistances(params):
-    R = {**params["resistance"], **blood_resistance(params)}
+    R = {**params["resistance"]}
     return R
-
-
-def blood_resistance(params):
-    Q = params["flowrate"]["blood"]
-    dp = params["pressure_drop"]
-    return {
-        "arteries": dp[("arteries", "capillaries")] / Q,
-        "capillaries": dp[("c_prox", "c_dist")] / Q,
-        "veins": dp[("capillaries", "veins")] / Q,
-    }
 
 
 def get_permeabilities(p):
     R = get_resistances(p)
     mu = p["viscosity"]
     k = {"ecs": p["permeability"]["ecs"]}
+    K = p["hydraulic_conductivity"]
     length_area_ratio = R["ecs"] * k["ecs"] / mu["ecs"]
-    for comp in [*SHARED_PARAMETERS["pvs"], *SHARED_PARAMETERS["blood"]]:
+    for comp in SHARED_PARAMETERS["pvs"]:
         k[comp] = length_area_ratio * mu[comp] / R[comp]
-
+    for comp in SHARED_PARAMETERS["blood"]:
+        k[comp] = K[comp] * mu[comp]
     return {key: val.to("mm^2") for key, val in k.items()}
 
 
 def get_convective_fluid_transfer(params):
     T = {}
     V = params["human_brain_volume"]
-    # Compute membrane transfer coefficients.
-    # FIXME: Apparent error in resistance ecs-capillaries.
     for vi in SHARED_PARAMETERS["blood"]:
         L_ecs_vi = params["hydraulic_conductivity"][("ecs", vi)]
         surface_ratio = params["surface_volume_ratio"][("ecs", vi)]
         T_ecs_vi = L_ecs_vi * surface_ratio
-        R_ecs_vi = params["resistance_interface"][("ecs", vi)]
 
-        T[("ecs", pvs(vi))] = 1.0 / (V * R_ecs_vi)
-        T[(pvs(vi), vi)] = compute_partial_fluid_transfer(V, R_ecs_vi, T_ecs_vi)
+        if vi == 'capillaries':
+            R_pc_c = params["resistance_interface"][("pvs_capillaries", "capillaries")]
+            R_e_pc = 1.0 / (T_ecs_vi * V) - R_pc_c
+            T[(pvs(vi), vi)] = 1.0 / (V * R_pc_c)
+            T[("ecs", pvs(vi))] = 1.0 / (V * R_e_pc)
+        else:
+            R_e_pvi = params["resistance_interface"][("ecs", pvs(vi))]
+            R_pvi_vi = 1.0 / (T_ecs_vi * V) - R_e_pvi
+            T[("ecs", pvs(vi))] = 1.0 / (V * R_e_pvi)
+            T[(pvs(vi), vi)] = 1.0 / (V * R_pvi_vi)
 
     # Compute connected transfer coefficients.
     for vi, vj in SHARED_PARAMETERS["connected_blood"]:
         Q = params["flowrate"]
         dp = params["pressure_drop"]
-        T[(vi, vj)] = compute_connected_fluid_transfer(V, Q["blood"], dp[(vi, vj)])
+        T[(vi, vj)] = compute_connected_fluid_transfer(params["brain_volume"], Q["blood"], dp[(vi, vj)])
         T[(pvs(vi), pvs(vj))] = compute_connected_fluid_transfer(
             V, Q["csf"], dp[(pvs(vi), pvs(vj))]
         )
@@ -420,7 +429,7 @@ def diffusion_porous(
     beta = solute_radius / pore_radius
     return D_free * (
         1.0
-        - 2.10444 * beta  # **6
+        - 2.10444 * beta
         + 2.08877 * beta ** 3
         - 0.094813 * beta ** 5
         - 1.372 * beta ** 6
@@ -442,16 +451,20 @@ def get_diffusive_solute_transfer_inulin(params):
 
 
 def get_boundary_hydraulic_permeabilities(p):
-    # FIXME: This function is seemingly wrong.
-    R_bdry = {
-        "ecs": 2 * p["resistance"]["pvs_arteries"],
-        "pvs_arteries": p["resistance"]["pvs_arteries"],
-        "arteries": blood_resistance(p)["arteries"],
-    }
-    L_bdry = {}
+    # FIXME: There seems to be an error with the arterial hydraulic cond.
+    dp = p["pressure_drop"]
+    Q = p["flowrate"]["blood"]
+    Ra = dp[("arteries", "capillaries")] / Q
+
+    Rpa = 2 * p["resistance"]["pvs_arteries"]
     S = p["human_brain_surface_area"]
-    for j in R_bdry:
-        L_bdry[j] = 1.0 / (R_bdry[j] * S)
+    V = p["human_brain_volume"]
+    gamma = get_convective_fluid_transfer(p)
+
+    L_bdry = {}
+    L_bdry["ecs"] = 1.0 / (2 * Rpa * S)
+    L_bdry["pvs_arteries"] = gamma[("ecs", "pvs_arteries")] * V / S
+    L_bdry["arteries"] = 1.0 / (Ra * S)
     return {key: value.to("mm / (Pa * s)") for key, value in L_bdry.items()}
 
 
@@ -564,3 +577,11 @@ def get_diffusive_solute_transfer(params, solute):
         )
         L[(f"pvs_{vi}", vi)] = P[(f"pvs_{vi}", vi)] * surf_volume_ratio[("ecs", vi)]
     return {key: val.to(1 / (s)) for key, val in L.items()}
+
+
+if __name__ == "__main__":
+    base = get_base_parameters()
+    extended = distribute_subset_parameters(base, SHARED_PARAMETERS)
+    params = compute_parameters(extended)
+    print_quantities(base, 40)
+    print_quantities(params, 40)
