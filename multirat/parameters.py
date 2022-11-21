@@ -92,9 +92,9 @@ BASE_PARAMETERS = {
     "viscosity": {"blood": 2.67e-3 * Pa * s, "csf": 8.3e-4 * Pa * s},
     "permeability": {"ecs": 2.0e-11 * mm ** 2},
     "hydraulic_conductivity": {
-        "arteries": 1.234 * mm**3 * s / kg,
-        "capillaries": 4.28e-4 * mm**3 * s / kg,
-        "veins": 2.468 * mm**3 * s / kg,
+        "arteries": 1.234 * mm ** 3 * s / kg,
+        "capillaries": 4.28e-4 * mm ** 3 * s / kg,
+        "veins": 2.468 * mm ** 3 * s / kg,
         ("ecs", "arteries"): 9.1e-10 * mm / (Pa * s),
         ("ecs", "capillaries"): 1.0e-10 * mm / (Pa * s),
         ("ecs", "veins"): 2.0e-11 * mm / (Pa * s),
@@ -104,10 +104,7 @@ BASE_PARAMETERS = {
         ("ecs", "capillaries"): 9.0 / mm,
         ("ecs", "veins"): 3.0 / mm,
     },
-    "flowrate": {
-        "blood": 2.4 * mL / minute,
-        "csf": 3.33 * mm ** 3 / s,
-    },
+    "flowrate": {"blood": 2.4 * mL / minute, "csf": 3.33 * mm ** 3 / s},
     "pressure_drop": {
         ("arteries", "capillaries"): 40.0 * mmHg,
         ("capillaries", "veins"): 13.0 * mmHg,
@@ -126,7 +123,7 @@ BASE_PARAMETERS = {
         ("pvs_capillaries", "capillaries"): 125.31 * mmHg / (mL / minute),
     },
     "diameter": {"arteries": 50.0 * um, "capillaries": 10.0 * um, "veins": 50.0 * um},
-    "solute_radius": {"inulin": 15.2e-7 * mm, "amyloid_beta": 0.9 * nm}, 
+    "solute_radius": {"inulin": 15.2e-7 * mm, "amyloid_beta": 0.9 * nm},
     ###################################################################
     # Related to permeability of BBB. Since this work is restricted to inulin, only AEF is of interest.
     "membranes": {
@@ -189,7 +186,7 @@ PARAMETER_UNITS = {
     "convective_solute_transfer": "1 / (Pa * s)",
     "effective_diffusion": "mm**2 / s",
     "hydraulic_conductivity_bdry": "mm / (Pa * s)",
-    "pressure_boundaries": "Pa"
+    "pressure_boundaries": "Pa",
 }
 
 
@@ -287,6 +284,7 @@ def symmetric(param, compartments):
             raise KeyError(f"Neither {(i, j)} or {(j, i)} in param")
     return out
 
+
 def get_effective_diffusion(params, solute):
     Dfree = params["diffusion_coefficient_free"][solute]
     tortuosity = params["tortuosity"]
@@ -335,7 +333,7 @@ def get_convective_fluid_transfer(params):
         surface_ratio = params["surface_volume_ratio"][("ecs", vi)]
         T_ecs_vi = L_ecs_vi * surface_ratio
 
-        if vi == 'capillaries':
+        if vi == "capillaries":
             R_pc_c = params["resistance_interface"][("pvs_capillaries", "capillaries")]
             R_e_pc = 1.0 / (T_ecs_vi * V) - R_pc_c
             T[(pvs(vi), vi)] = 1.0 / (V * R_pc_c)
@@ -350,7 +348,9 @@ def get_convective_fluid_transfer(params):
     for vi, vj in SHARED_PARAMETERS["connected_blood"]:
         Q = params["flowrate"]
         dp = params["pressure_drop"]
-        T[(vi, vj)] = compute_connected_fluid_transfer(params["brain_volume"], Q["blood"], dp[(vi, vj)])
+        T[(vi, vj)] = compute_connected_fluid_transfer(
+            params["brain_volume"], Q["blood"], dp[(vi, vj)]
+        )
         T[(pvs(vi), pvs(vj))] = compute_connected_fluid_transfer(
             V, Q["csf"], dp[(pvs(vi), pvs(vj))]
         )
