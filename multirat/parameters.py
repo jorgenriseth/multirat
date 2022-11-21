@@ -184,7 +184,9 @@ PARAMETER_UNITS = {
     "osmotic_reflection": "",
     "diffusive_solute_transfer": "1 / s",
     "convective_solute_transfer": "1 / (Pa * s)",
-    "effective_diffusion_inulin": "mm**2 / s",
+    "effective_diffusion": "mm**2 / s",
+    "hydraulic_conductivity_bdry": "mm / (Pa * s)",
+    "pressure_boundaries": "Pa"
 }
 
 
@@ -221,10 +223,12 @@ def print_quantities(p, offset, depth=0):
                 print(f"{depth*'  '}{str(key):<{format_size+1}}: {value}")
 
 
-def distribute_subset_parameters(base, subsets):
+def distribute_subset_parameters(base, subsets=None):
     """Take any parameter entry indexed by the name of some subset (e.g. 'blood'), 
     and create a new entry for each of the compartments/interfaces included in the
     given subset."""
+    if subsets is None:
+        subsets = get_shared_parameters()
     extended = {}
     for param_name, param_value in base.items():
         if not isinstance(param_value, dict):

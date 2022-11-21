@@ -22,23 +22,35 @@ def hydraulic_conductivity(p, compartments):
     k = p["permeability"]
     mu = p["viscosity"]
     phi = p["porosity"]
-    return { i: k[i] / (mu[i] * phi[i]) for i in compartments}
+    return {i: k[i] / (mu[i] * phi[i]) for i in compartments}
 
-def convective_fluid_transfer(p , compartments):
+
+def convective_fluid_transfer(p, compartments):
     return get_interface_parameter(p["convective_fluid_transfer"], compartments)
 
 
 def solve_pressure(domain, V, compartments, boundaries, params):
     p = TrialFunctions(V)
     q = TestFunction(V)
-    K = {key: Constant(val) for key, val in hydraulic_conductivity(params, compartments).items()}
-    T = {key: Constant(val) for key, val in convective_fluid_transfer(params, compartments).items()}
+    K = {
+        key: Constant(val)
+        for key, val in hydraulic_conductivity(params, compartments).items()
+    }
+    T = {
+        key: Constant(val)
+        for key, val in convective_fluid_transfer(params, compartments).items()
+    }
 
     imap = {label: idx for idx, label in enumerate(compartments)}
     F = 0.0
     for j in compartments:
-        F += (K[j] * inner(grad(p[imap[j]]), grad(q[imap[j]]))
-            - sum([ T[(i, j)]*(p[imap[i]] - p[imap[j]])*q[imap[j]] for i in compartments if i != j])
+        F += (
+            K[j] * inner(grad(p[imap[j]]), grad(q[imap[j]])) * dx
+        F -= sum([T[(i, j)] * (p[imap[i]] - p[imap[j]]) * q[imap[j]]
+                    for i in compartments
+                    if i != j
+                ]
+            )
         ) * dx
     bcs = []
     for i in compartments:
@@ -56,12 +68,16 @@ def solve_pressure(domain, V, compartments, boundaries, params):
 
 
 if __name__ == "__main__":
-    from dolfin import (FiniteElement, MixedElement, FunctionSpace, RectangleMesh, Point)
+    from dolfin import FiniteElement, MixedElement, FunctionSpace, RectangleMesh, Point
     from base.meshprocessing import Domain
-    from multirat.parameters import get_base_parameters, get_pressure_parameters, make_dimless
+    from multirat.parameters import (
+        get_base_parameters,
+        get_pressure_parameters,
+        make_dimless,
+    )
     from pantarei.boundary import DirichletBoundary, RobinBoundary
 
-    def create_mesh(n, x0=-1., y0=-1., x1=1., y1=1.):
+    def create_mesh(n, x0=-1.0, y0=-1.0, x1=1.0, y1=1.0):
         return Domain(
             mesh=RectangleMesh(Point(x0, y0), Point(x1, y1), n, n),
             subdomains=None,
@@ -72,17 +88,16 @@ if __name__ == "__main__":
     domain = create_mesh(100)
     compartments = ["pvs_arteries", "pvs_veins", "ecs"]
 
-    P1 = FiniteElement('CG', domain.mesh.ufl_cell(), 1)
-    el = MixedElement([P1]* len(compartments))
+    P1 = FiniteElement("CG", domain.mesh.ufl_cell(), 1)
+    el = MixedElement([P1] * len(compartments))
     V = FunctionSpace(domain.mesh, el)
     # V = LabeledFunctionSpace(domain.mesh, el, compartments)
     boundaries = {
         "pvs_arteries": [RobinBoundary(Constant(1e-1), Constant(1.0), "everywhere")],
         "pvs_veins": [DirichletBoundary(Constant(0.0), "everywhere")],
-        "ecs": [DirichletBoundary(Constant(0.5), "everywhere")]
+        "ecs": [DirichletBoundary(Constant(0.5), "everywhere")],
     }
     results_path = "../results/pressure"
-
 
     PARAMETER_UNITS = {
         "permeability": "mm**2",
@@ -90,7 +105,7 @@ if __name__ == "__main__":
         "porosity": "",
         "convective_fluid_transfer": "1 / (Pa * s)",
         "osmotic_pressure": "Pa",
-        "osmotic_reflection": ""
+        "osmotic_reflection": "",
     }
     params = make_dimless(get_pressure_parameters(base), PARAMETER_UNITS)
 

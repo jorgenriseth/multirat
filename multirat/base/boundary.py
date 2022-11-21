@@ -6,7 +6,9 @@ from typing import Union
 
 
 class BoundaryData(ABC):
-    def __init__(self, condition_type: str, idx: Union[int, str], boundary_name: str = None):
+    def __init__(
+        self, condition_type: str, idx: Union[int, str], boundary_name: str = None
+    ):
         self.type = condition_type
         self.idx = idx
         if boundary_name is None:
@@ -35,14 +37,13 @@ class VariationalBoundary(BoundaryData):
     def variational_boundary_form(self, n, v, ds):
         pass
 
-    def process(self, test, domain, space):
-        # v = TestFunction(space)
+    def process(self, trial, test, domain):
         n = FacetNormal(domain.mesh)
         if domain.boundaries is None:
             ds = Measure("ds", domain=domain.mesh)
         else:
             ds = Measure("ds", domain=domain.mesh, subdomain_data=domain.boundaries)
-        return self.variational_boundary_form(n, , ds)
+        return self.variational_boundary_form(trial, test, n, ds)
 
 
 class TractionBoundary(VariationalBoundary):
@@ -54,17 +55,29 @@ class TractionBoundary(VariationalBoundary):
         return inner(self.g * n, v) * ds(self.idx)
 
 
-def process_dirichlet(domain, space, boundaries):
-    return [bc.process(domain, space) for bc in boundaries if isinstance(bc, DirichletBoundary)]
-
-
-def process_boundary_forms(test, domain, space, boundaries):
-    return sum([bc.process(test, domain, space) for bc in boundaries if isinstance(bc, VariationalBoundary)])
-
-
 class RobinBoundary(VariationalBoundary):
-    def __init__(self, ):
-        pass
+    def __init__(self, coeff, value, idx, **kwargs):
+        self.a = coeff
+        self.g = value
+        super().__init__("Robin", idx=idx, **kwargs)
 
-    def variational_boundary_form(self, n, v, ds):
-        return 
+    def variational_boundary_form(self, u, v, n, ds):
+        return self.a * (self.g - u) * v * ds
+
+
+def process_dirichlet(domain, space, boundaries):
+    return [
+        bc.process(domain, space)
+        for bc in boundaries
+        if isinstance(bc, DirichletBoundary)
+    ]
+
+
+def process_boundary_forms(trial, test, domain, boundaries):
+    return sum(
+        [
+            bc.process(trial, test, domain)
+            for bc in boundaries
+            if isinstance(bc, VariationalBoundary)
+        ]
+    )
