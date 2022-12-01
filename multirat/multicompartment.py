@@ -28,7 +28,6 @@ def pressure_variational_form(trial, test, compartments, K, G, source=None):
             )
             * dx
         )
-
     if source is not None:  
         F -= sum([source[j] * q[idx] for idx, j in enumerate(compartments)]) * dx
     return F
@@ -40,7 +39,7 @@ def solve_stationary(V, F, bcs, name="pressure"):
     P = Function(V, name=name)
     for bc in bcs:
         bc.apply(A, b)
-        solve(A, P.vector(), b)
+    solve(A, P.vector(), b)
     return P
 
 
@@ -49,27 +48,16 @@ def process_boundaries_multicompartment(p, q, F, boundaries, V, compartments, do
     for idx_i, i in enumerate(compartments):
         bcs.extend(process_dirichlet(domain, V.sub(idx_i), boundaries[i]))
         F -= process_boundary_forms(p[idx_i], q[idx_i], domain, boundaries[i])
-    return bcs
+    return F, bcs
 
 
-def solve_pressure(V, compartments, boundaries, params, subboundaries=None, source=None):
+def solve_pressure(domain, V, compartments, boundaries, params, source=None):
     p = TrialFunctions(V)
     q = TestFunction(V)
     K, G = to_constant(params, "hydraulic_conductivity", "convective_fluid_transfer")
 
     F = pressure_variational_form(p, q, compartments, K, G, source=source)
-
-    if subboundaries is None:
-        domain = Domain(V.mesh(), None, None)
-    else:
-        mesh = V.mesh()
-        boundary_tags = MeshFunction("size_t", mesh, 1, 0)
-        [subd.mark(boundary_tags, tag) for tag, subd in subboundaries.items()]
-        domain = Domain(mesh, None, boundary_tags)
-
-
-    bcs = process_boundaries_multicompartment(p, q, F, boundaries, V, compartments, domain)
-
+    F, bcs = process_boundaries_multicompartment(p, q, F, boundaries, V, compartments, domain)
     return solve_stationary(V, F, bcs, "pressure")
 
 
