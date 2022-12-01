@@ -76,11 +76,7 @@ if __name__ == "__main__":
     from pantarei.boundary import DirichletBoundary, RobinBoundary
 
     from multirat.meshprocessing import Domain
-    from multirat.parameters import (
-        get_base_parameters,
-        get_pressure_parameters,
-        make_dimless,
-    )
+    from multirat.parameters import get_base_parameters, get_pressure_parameters, make_dimless
 
     def create_mesh(n, x0=-1.0, y0=-1.0, x1=1.0, y1=1.0):
         return Domain(

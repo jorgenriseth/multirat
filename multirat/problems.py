@@ -1,13 +1,4 @@
-from dolfin import (
-    Function,
-    TestFunction,
-    TrialFunction,
-    assemble,
-    dx,
-    grad,
-    inner,
-    solve,
-)
+from dolfin import Function, TestFunction, TrialFunction, assemble, dx, grad, inner, solve
 
 from multirat.boundary import process_boundary_forms, process_dirichlet
 from multirat.boundary_conditions import (

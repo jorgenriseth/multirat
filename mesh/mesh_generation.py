@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 from argparse import ArgumentParser
 from pathlib import Path
-from multirat.base.meshprocessing import stl2hdf
+
 import SVMTK
 
+from multirat.base.meshprocessing import stl2hdf
 
 parser = ArgumentParser(
     description="""
@@ -14,13 +15,18 @@ parser = ArgumentParser(
                 the same directory, given by the '--inputdir'-argument."""
 )
 meshdir = f"{Path(__file__).resolve().parent}"
-parser.add_argument('--resolution', type=int, required=True, nargs="+")
-parser.add_argument('--inputdir', type=str, default=f"{meshdir}/stl-files/")
-parser.add_argument('--outputdir', type=str, default=f"{meshdir}")
-parser.add_argument('--tmpdir', type=str, default='/tmp/ratbrain/', help='Defaults to "/tmp/ratbrain". If provided,'
-                                                                         'any intermediate files required in the '
-                                                                         'creation of the mesh file will be saved in '
-                                                                         'this directory.')
+parser.add_argument("--resolution", type=int, required=True, nargs="+")
+parser.add_argument("--inputdir", type=str, default=f"{meshdir}/stl-files/")
+parser.add_argument("--outputdir", type=str, default=f"{meshdir}")
+parser.add_argument(
+    "--tmpdir",
+    type=str,
+    default="/tmp/ratbrain/",
+    help='Defaults to "/tmp/ratbrain". If provided,'
+    "any intermediate files required in the "
+    "creation of the mesh file will be saved in "
+    "this directory.",
+)
 
 args = parser.parse_args()
 
