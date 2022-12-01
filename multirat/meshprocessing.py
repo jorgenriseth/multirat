@@ -1,18 +1,18 @@
 #!/usr/bin/env python
-import os
 import glob
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import meshio
 import SVMTK as svmtk
-from dolfin import Mesh, MeshFunction, XDMFFile, HDF5File, MeshValueCollection
+from dolfin import HDF5File, Mesh, MeshFunction, MeshValueCollection, XDMFFile
 from dolfin.cpp.mesh import MeshFunctionSizet
 
 
 # TODO: Change all conversions to output the path to resulting files, and create single unified function for conversion.
 def prune_z_0(mesh):
-    return
+    return mesh.points[:, :2]
 
 
 def clean_tmp(directory, suffix, no_output=False):
@@ -32,7 +32,9 @@ def clean_tmp(directory, suffix, no_output=False):
 def stl2mesh(stlfiles, meshfile_out, resolution, subdomain_map=None, remove_subdomains=None):
     """Creates an svmtk-domain from a set of stl-files, and stores as a meshio .mesh-file. May optionally remove
     sepecifc subdomains, or add subdomain markers."""
-    assert type(stlfiles) == list, "stlfiles should be list. (single surface may be wrapped as length 1 list)."
+    assert (
+        type(stlfiles) == list
+    ), "stlfiles should be list. (single surface may be wrapped as length 1 list)."
     stlfiles = list(stlfiles)
     surfaces = [svmtk.Surface(str(stl)) for stl in stlfiles]
     if subdomain_map is not None:
@@ -59,6 +61,11 @@ def meshfunction_default_value(meshfunction, value: int = 0):
 
 
 def mesh2xdmf(meshfile, xdmfdir, dim=2):
+    mesh = meshio.read(meshfile)
+    return meshio2xdmf(mesh, xdmfdir, dim=2)
+
+
+def meshio2xdmf(mesh, xdmfdir, dim=2):
     if dim == 2:
         polytope_label = "triangle"
         facet_label = "line"
@@ -66,31 +73,56 @@ def mesh2xdmf(meshfile, xdmfdir, dim=2):
         polytope_label = "tetra"
         facet_label = "triangle"
     else:
-        raise ValueError(f"dim should be in (2, 3), got {dim}.")
+        raise ValueError("dim should be in (2, 3), got {}.".format(dim))
 
-    # Read meshfile into mesh object, Extract mesh, boundaries and labels.
-    mesh = meshio.read(meshfile)
     if dim == 2:
-        mesh.prune_z_0()
-    points = mesh.points
+        points = prune_z_0(mesh)
+    else:
+        points = mesh.points
     polytopes = {polytope_label: mesh.cells_dict[polytope_label]}
     facets = {facet_label: mesh.cells_dict[facet_label]}
-    subdomains = {"subdomains": [
-        mesh.cell_data_dict["medit:ref"][polytope_label]]}
-    boundaries = {"boundaries": [
-        mesh.cell_data_dict["medit:ref"][facet_label]]}
 
     # Write the mesh into new xdmf file
     meshdata = meshio.Mesh(points, polytopes)
-    meshio.write(f"{xdmfdir}/mesh.xdmf", meshdata)
+    meshio.write("{}/mesh.xdmf".format(xdmfdir), meshdata)
+    if "gmsh:physical" in mesh.cell_data_dict:
+        # Write the subdomains of the mesh
+        subdomains = {"subdomains": [mesh.cell_data_dict["gmsh:physical"][polytope_label]]}
+        subdomainfile = meshio.Mesh(points, polytopes, cell_data=subdomains)
+        meshio.write("{}/subdomains.xdmf".format(xdmfdir), subdomainfile)
 
-    # Write the subdomainds of the mesh
-    subdomainfile = meshio.Mesh(points, polytopes, cell_data=subdomains)
-    meshio.write(f"{xdmfdir}/subdomains.xdmf", subdomainfile)
+        # Write the boundaries/interfaces of the mesh
+        boundaries = {"boundaries": [mesh.cell_data_dict["gmsh:physical"][facet_label]]}
+        boundaryfile = meshio.Mesh(points, facets, cell_data=boundaries)
+        meshio.write("{}/boundaries.xdmf".format(xdmfdir), boundaryfile)
 
-    # Write the boundaries/interfaces of the mesh
-    boundaryfile = meshio.Mesh(points, facets, cell_data=boundaries)
-    meshio.write(f"{xdmfdir}/boundaries.xdmf", boundaryfile)
+    return xdmfdir
+
+
+def xdmf2fenics(xdmfdir):
+    # Read xdmf-file into a FEniCS mesh
+    dirpath = Path(xdmfdir)
+    mesh = Mesh()
+    with XDMFFile(str(dirpath / "mesh.xdmf")) as meshfile:
+        meshfile.read(mesh)
+
+    # Read cell data to a MeshFunction (of dim n)
+    n = mesh.topology().dim()
+    if (dirpath / "subdomains.xdmf").exists():  # Assumes boundaries does not exist with subdomains.
+        subdomains = MeshFunction("size_t", mesh, n)
+        with XDMFFile(str(dirpath / "subdomains.xdmf")) as subdomainfile:
+            subdomainfile.read(subdomains, "subdomains")
+
+        # Read face data into a Meshfunction of dim n-1
+        bdrycollection = MeshValueCollection("size_t", mesh, n - 1)
+        with XDMFFile(str(dirpath / "boundaries.xdmf")) as boundaryfile:
+            boundaryfile.read(bdrycollection, "boundaries")
+        boundaries = MeshFunction("size_t", mesh, bdrycollection)
+        meshfunction_default_value(boundaries, 0)
+    else:
+        subdomains = boundaries = None
+
+    return mesh, subdomains, boundaries
 
 
 def xdmf2hdf(xdmfdir, hdf5file):
@@ -107,7 +139,7 @@ def xdmf2hdf(xdmfdir, hdf5file):
         subdomainfile.read(subdomains, "subdomains")
 
     # Read face data into a Meshfunction of dim n-1
-    bdrycollection = MeshValueCollection("size_t", mesh, n-1)
+    bdrycollection = MeshValueCollection("size_t", mesh, n - 1)
     with XDMFFile(str(dirpath / "boundaries.xdmf")) as boundaryfile:
         boundaryfile.read(bdrycollection, "boundaries")
     boundaries = MeshFunction("size_t", mesh, bdrycollection)
@@ -141,14 +173,23 @@ def geo2hdf(infile, outfile, dim=2, tmpdir="", clean=True):
     return outfile
 
 
-def stl2hdf(stlfiles, outfile, resolution, subdomain_map=None, remove_subdomains=None, tmpdir="/tmp/ratbrain"):
+def stl2hdf(
+    stlfiles, outfile, resolution, subdomain_map=None, remove_subdomains=None, tmpdir="/tmp/ratbrain"
+):
     tmppath = create_tmpdir(tmpdir)
     if tmppath != "/tmp/ratbrain":
         print("Intermediate files stored in: ", tmppath)
 
-    stl2mesh(stlfiles, tmppath / 'meshfile.mesh', resolution, subdomain_map=subdomain_map,
-             remove_subdomains=remove_subdomains)
-    mesh2hdf(tmppath / 'meshfile.mesh', outfile, dim=3, tmpdir=tmpdir)  # Dont think stls will be relevant in 2-dim case
+    stl2mesh(
+        stlfiles,
+        tmppath / "meshfile.mesh",
+        resolution,
+        subdomain_map=subdomain_map,
+        remove_subdomains=remove_subdomains,
+    )
+    mesh2hdf(
+        tmppath / "meshfile.mesh", outfile, dim=3, tmpdir=tmpdir
+    )  # Dont think stls will be relevant in 2-dim case
 
     if tmpdir == "/tmp/ratbrain":
         clean_tmp(tmppath, "meshfile.mesh")
@@ -189,7 +230,7 @@ def hdf2fenics(hdf5file, pack=False):
         n = mesh.topology().dim()
         subdomains = MeshFunction("size_t", mesh, n)
         hdf.read(subdomains, "/subdomains")
-        boundaries = MeshFunction("size_t", mesh, n-1)
+        boundaries = MeshFunction("size_t", mesh, n - 1)
         hdf.read(boundaries, "/boundaries")
 
     if pack:

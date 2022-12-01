@@ -3,7 +3,7 @@ from numpy import linspace
 
 class TimeKeeper:
     def __init__(self, dt, endtime):
-        self.t = 0.
+        self.t = 0.0
         self.iter = 0
         self.dt = dt
         self.T = endtime
@@ -16,7 +16,7 @@ class TimeKeeper:
         return self.t <= self.T
 
     def reset(self):
-        self.t = 0.
+        self.t = 0.0
         self.iter = 0
 
     def get_vector(self):

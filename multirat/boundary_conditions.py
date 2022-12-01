@@ -1,6 +1,7 @@
-from multirat.parameters import multicompartment_parameters, get_base_parameters
+from dolfin import Constant, FacetNormal, Measure, assemble, exp, grad, inner
+
 from multirat.boundary import DirichletBoundary
-from dolfin import Constant, FacetNormal, Measure, assemble, inner, grad, exp
+from multirat.parameters import get_base_parameters, multicompartment_parameters
 
 
 class HomogeneousDirichletBoundary(DirichletBoundary):
@@ -53,4 +54,3 @@ class TracerDecayBoundary(TracerODEBoundary):
             exp(-self.decay * time.dt)
             * (self.g - time.dt * self.k * assemble(inner(grad(u0), self.n) * self.ds))
         )
-

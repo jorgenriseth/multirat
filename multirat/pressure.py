@@ -1,12 +1,26 @@
 from itertools import combinations
-from typing import List
 from pathlib import Path
+from typing import List
 
-from dolfin import Function, TestFunctions, Constant, VectorFunctionSpace
-from dolfin import TrialFunctions, TestFunction
-from dolfin import inner, grad, solve, project, assemble, lhs, rhs, dx
+from dolfin import (
+    Constant,
+    Function,
+    TestFunction,
+    TestFunctions,
+    TrialFunctions,
+    VectorFunctionSpace,
+    assemble,
+    dx,
+    grad,
+    inner,
+    lhs,
+    project,
+    rhs,
+    solve,
+)
+from pantarei.boundary import process_boundary_forms, process_dirichlet
 from pantarei.io import TimeSeriesStorage
-from pantarei.boundary import process_dirichlet, process_boundary_forms
+
 from multirat.parameters import get_base_parameters, get_interface_parameter
 
 
@@ -32,25 +46,15 @@ def convective_fluid_transfer(p, compartments):
 def solve_pressure(domain, V, compartments, boundaries, params):
     p = TrialFunctions(V)
     q = TestFunction(V)
-    K = {
-        key: Constant(val)
-        for key, val in hydraulic_conductivity(params, compartments).items()
-    }
-    T = {
-        key: Constant(val)
-        for key, val in convective_fluid_transfer(params, compartments).items()
-    }
+    K = {key: Constant(val) for key, val in hydraulic_conductivity(params, compartments).items()}
+    T = {key: Constant(val) for key, val in convective_fluid_transfer(params, compartments).items()}
 
     imap = {label: idx for idx, label in enumerate(compartments)}
     F = 0.0
     for j in compartments:
         F += (
-            K[j] * inner(grad(p[imap[j]]), grad(q[imap[j]])) * dx
-        F -= sum([T[(i, j)] * (p[imap[i]] - p[imap[j]]) * q[imap[j]]
-                    for i in compartments
-                    if i != j
-                ]
-            )
+            K[j] * inner(grad(p[imap[j]]), grad(q[imap[j]]))
+            - sum([T[(i, j)] * (p[imap[i]] - p[imap[j]]) * q[imap[j]] for i in compartments if i != j])
         ) * dx
     bcs = []
     for i in compartments:
@@ -68,20 +72,19 @@ def solve_pressure(domain, V, compartments, boundaries, params):
 
 
 if __name__ == "__main__":
-    from dolfin import FiniteElement, MixedElement, FunctionSpace, RectangleMesh, Point
-    from base.meshprocessing import Domain
+    from dolfin import FiniteElement, FunctionSpace, MixedElement, Point, RectangleMesh
+    from pantarei.boundary import DirichletBoundary, RobinBoundary
+
+    from multirat.meshprocessing import Domain
     from multirat.parameters import (
         get_base_parameters,
         get_pressure_parameters,
         make_dimless,
     )
-    from pantarei.boundary import DirichletBoundary, RobinBoundary
 
     def create_mesh(n, x0=-1.0, y0=-1.0, x1=1.0, y1=1.0):
         return Domain(
-            mesh=RectangleMesh(Point(x0, y0), Point(x1, y1), n, n),
-            subdomains=None,
-            boundaries=None,
+            mesh=RectangleMesh(Point(x0, y0), Point(x1, y1), n, n), subdomains=None, boundaries=None
         )
 
     base = get_base_parameters()
@@ -91,7 +94,6 @@ if __name__ == "__main__":
     P1 = FiniteElement("CG", domain.mesh.ufl_cell(), 1)
     el = MixedElement([P1] * len(compartments))
     V = FunctionSpace(domain.mesh, el)
-    # V = LabeledFunctionSpace(domain.mesh, el, compartments)
     boundaries = {
         "pvs_arteries": [RobinBoundary(Constant(1e-1), Constant(1.0), "everywhere")],
         "pvs_veins": [DirichletBoundary(Constant(0.0), "everywhere")],

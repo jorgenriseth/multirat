@@ -1,8 +1,9 @@
+from abc import ABC, abstractmethod
+from typing import Union
+
+from dolfin import FacetNormal, Measure
 from fenics import DirichletBC
 from ufl import inner
-from abc import ABC, abstractmethod
-from dolfin import FacetNormal, Measure
-from typing import Union
 
 
 class BoundaryData(ABC):

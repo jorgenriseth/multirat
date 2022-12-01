@@ -1,11 +1,13 @@
 from multirat.computers import BaseComputer
 from multirat.problems import BaseDiffusionProblem
-from multirat.base.timeseriesstorage import TimeSeriesStorage
+from multirat.timeseriesstorage import TimeSeriesStorage
 
 
 def print_progress(time):
     progress = int(20 * time.t / time.T)
-    print(f"[{'=' * progress}{' ' * (20 - progress)}] {time.t / 60:>6.1f}min / {time.T / 60:<5.1f}min", end='\r')
+    print(
+        f"[{'=' * progress}{' ' * (20 - progress)}] {time.t / 60:>6.1f}min / {time.T / 60:<5.1f}min", end="\r"
+    )
 
 
 def solve_diffusion_problem(problem: BaseDiffusionProblem, results_path, computer=None):

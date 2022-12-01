@@ -1,18 +1,17 @@
 import logging
-from datetime import datetime
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from time import sleep
 
-import ulfy
 import matplotlib.pyplot as plt
 import sympy as sp
+import ulfy
 from dolfin import *
 
-from multirat.boundary import RobinBoundary, DirichletBoundary
+from multirat.boundary import DirichletBoundary, RobinBoundary
 from multirat.meshprocessing import Domain
 from multirat.multicompartment import solve_pressure
-
 
 LOGGER = logging.getLogger()
 
@@ -132,7 +131,6 @@ def test_solver():
     P = assign_mixed_function(p_expr, V, compartments)
     assert abs(P.vector()[:] - Ph.vector()[:]).max() < 1e-10
 
-
     vmin = Ph.vector().min()
     vmax = Ph.vector().max()
     fig = plt.figure()
@@ -141,7 +139,7 @@ def test_solver():
         c = plot(P.sub(idx), vmin=vmin, vmax=vmax)
         plt.colorbar(c)
         plt.title(j)
-    
+
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     path = Path(f"/tmp/test-multirat-{timestamp}/")
     path.mkdir()

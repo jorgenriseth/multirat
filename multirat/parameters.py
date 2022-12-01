@@ -1,7 +1,7 @@
 import numbers
 from itertools import combinations
 
-from numpy import exp, sqrt, pi
+from numpy import exp, pi, sqrt
 from pint import Quantity, UnitRegistry
 
 # Define units

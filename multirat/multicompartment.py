@@ -1,12 +1,12 @@
 from pathlib import Path
 
 import numpy as np
-
 from dolfin import *
-from multirat.boundary import process_dirichlet, process_boundary_forms
+
+from multirat.boundary import process_boundary_forms, process_dirichlet
+from multirat.meshprocessing import Domain
 from multirat.parameters import to_constant
 from multirat.timeseriesstorage import TimeSeriesStorage
-from multirat.meshprocessing import Domain
 
 
 def pressure_variational_form(trial, test, compartments, K, G, source=None):
@@ -28,7 +28,7 @@ def pressure_variational_form(trial, test, compartments, K, G, source=None):
             )
             * dx
         )
-    if source is not None:  
+    if source is not None:
         F -= sum([source[j] * q[idx] for idx, j in enumerate(compartments)]) * dx
     return F
 
@@ -163,9 +163,9 @@ def solve_solute(
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
+    from multirat.boundary import DirichletBoundary, RobinBoundary
     from multirat.meshprocessing import Domain
     from multirat.parameters import multicompartment_parameters
-    from multirat.boundary import DirichletBoundary, RobinBoundary
 
     def create_mesh(n, x0=-1.0, y0=-1.0, x1=1.0, y1=1.0):
         return Domain(
