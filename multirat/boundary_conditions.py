@@ -1,17 +1,17 @@
-from .parameters import PARAMS
-from multirat.base.boundary import DirichletBoundary
-from dolfin import Constant, FacetNormal, Measure, assemble, inner, grad, exp
+from dolfin import Constant, FacetNormal, Measure, assemble, exp, grad, inner
+
+from multirat.boundary import DirichletBoundary
+from multirat.parameters import get_base_parameters, multicompartment_parameters
 
 
 class HomogeneousDirichletBoundary(DirichletBoundary):
     def __init__(self):
-        super().__init__(Constant(0.), "everywhere")
+        super().__init__(Constant(0.0), "everywhere")
 
 
-# TODO: Add scaling directly in parameters-file?
 class TracerODEBoundary(DirichletBoundary):
     def __init__(self):
-        self.g = Constant(0.)
+        self.g = Constant(0.0)
         super().__init__(self.g, "everywhere")
 
         self.k = float()  # = phi * D / Vcsf, to be read from file.
@@ -25,9 +25,10 @@ class TracerODEBoundary(DirichletBoundary):
         return super().process(domain, space)
 
     def set_parameters(self, domain):
-        phi = PARAMS["porosity_ecs"]
-        D = PARAMS["diffusion_constant"]
-        Vbrain = assemble(1. * Measure('dx', domain=domain.mesh))
+        params = multicompartment_parameters(["ecs"])
+        phi = params["porosity"]["ecs"]
+        D = params["effective_diffusion"]["ecs"]
+        Vbrain = assemble(1.0 * Measure("dx", domain=domain.mesh))
         Vcsf = 0.1 * Vbrain
         self.k = phi * D / Vcsf
 
@@ -41,12 +42,15 @@ class TracerConservationBoundary(TracerODEBoundary):
 
 
 class TracerDecayBoundary(TracerODEBoundary):
-    def __init__(self, decay=PARAMS["decay"]):
+    def __init__(self, decay=None):
+        if decay is None:
+            params = get_base_parameters()
+            decay = params["csf_renewal_rate"]
         super().__init__()
         self.decay = decay  # CSF renewal rate
 
     def update(self, u0, time):
         self.g.assign(
-            exp(-self.decay * time.dt) * (self.g - time.dt * self.k * assemble(inner(grad(u0), self.n) * self.ds))
+            exp(-self.decay * time.dt)
+            * (self.g - time.dt * self.k * assemble(inner(grad(u0), self.n) * self.ds))
         )
-

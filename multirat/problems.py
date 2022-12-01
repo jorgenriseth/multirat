@@ -1,13 +1,28 @@
-from dolfin import Function, TestFunction, TrialFunction
-from dolfin import assemble, dx, inner, grad, solve
+from dolfin import (
+    Function,
+    TestFunction,
+    TrialFunction,
+    assemble,
+    dx,
+    grad,
+    inner,
+    solve,
+)
 
-from multirat.base.boundary import process_dirichlet, process_boundary_forms
-from multirat.parameters import PARAMS
-from multirat.boundary_conditions import TracerConservationBoundary, TracerDecayBoundary, HomogeneousDirichletBoundary
+from multirat.boundary import process_boundary_forms, process_dirichlet
+from multirat.boundary_conditions import (
+    HomogeneousDirichletBoundary,
+    TracerConservationBoundary,
+    TracerDecayBoundary,
+)
+from multirat.parameters import multicompartment_parameters
 
 
 class BaseDiffusionProblem:
-    def __init__(self, domain, timekeeper, u0, functionspace, boundaries, D=PARAMS["diffusion_constant"]):
+    def __init__(self, domain, timekeeper, u0, functionspace, boundaries, D=None):
+        if D is None:
+            params = multicompartment_parameters(["ecs"])
+            D = params["effective_diffusion"]["ecs"]
         self.domain = domain  # Class containing mesh, subdomains and boudnary info
         self.boundaries = boundaries
         self.time = timekeeper
@@ -16,7 +31,9 @@ class BaseDiffusionProblem:
         self.A = None  # Bilinear form, assembled matrix
         self.L = None  # Linear from (not assembled)
         self.u = None  # Function to hold solutions.
-        self.u0 = Function(functionspace, name="concentration")  # Function to hold solution at previous timestep.
+        self.u0 = Function(
+            functionspace, name="concentration"
+        )  # Function to hold solution at previous timestep.
         self.u0.assign(u0)
         self.bcs = []  # List of possible DirichletBoundaries
 
@@ -30,12 +47,14 @@ class BaseDiffusionProblem:
     def init_solver(self):
         self.build_variational_form()
         self.process_boundaries(self.boundaries)
-        self.u = Function(self.V, name='concentration')
+        self.u = Function(self.V, name="concentration")
         self.u.assign(self.u0)
 
     def process_boundaries(self, boundaries):
+        u = TrialFunction(self.V)
+        v = TestFunction(self.V)
         self.bcs = process_dirichlet(self.domain, self.V, boundaries)
-        self.L += process_boundary_forms(self.domain, self.V, boundaries)
+        self.L += process_boundary_forms(u, v, self.domain, boundaries)
 
     def pre_solve(self):
         pass
@@ -51,7 +70,10 @@ class BaseDiffusionProblem:
 
 
 class HomogeneousProblem(BaseDiffusionProblem):
-    def __init__(self, domain, timekeeper, u0, functionspace, D=PARAMS["diffusion_constant"]):
+    def __init__(self, domain, timekeeper, u0, functionspace, D=None):
+        if D is None:
+            params = multicompartment_parameters(["ecs"])
+            D = params["effective_diffusion"]["ecs"]
         bc = [HomogeneousDirichletBoundary()]
         super().__init__(domain, timekeeper, u0, functionspace, bc, D=D)
 
@@ -62,12 +84,18 @@ class BoundaryODEProblem(BaseDiffusionProblem):
 
 
 class TracerConservationProblem(BoundaryODEProblem):
-    def __init__(self, domain, timekeeper, u0, functionspace, D=PARAMS["diffusion_constant"]):
+    def __init__(self, domain, timekeeper, u0, functionspace, D=None):
+        if D is None:
+            params = multicompartment_parameters(["ecs"])
+            D = params["effective_diffusion"]["ecs"]
         boundaries = [TracerConservationBoundary()]
         super().__init__(domain, timekeeper, u0, functionspace, boundaries, D)
 
 
 class TracerDecayProblem(BoundaryODEProblem):
-    def __init__(self, domain, timekeeper, u0, functionspace, D=PARAMS["diffusion_constant"]):
+    def __init__(self, domain, timekeeper, u0, functionspace, D=None):
+        if D is None:
+            params = multicompartment_parameters(["ecs"])
+            D = params["effective_diffusion"]["ecs"]
         boundaries = [TracerDecayBoundary()]
         super().__init__(domain, timekeeper, u0, functionspace, boundaries, D)
