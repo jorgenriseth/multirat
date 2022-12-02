@@ -20,7 +20,7 @@ def run_mms_convergence():
         V = pressure_functionspace(domain.mesh, 1, compartments)
         Ph = solve_pressure(domain, V, compartments, boundaries, parameters, source=f)
         P = assign_mixed_function(p_expr, V, compartments)
-        E.append(errornorm(P, Ph, "H1"))
+        E.append(errornorm(P, Ph, "H1"))  # TODO: Replace by custom function, NOT interpolating onto V
         hvec.append(domain.mesh.hmax())
 
     vmin = Ph.vector().min()
@@ -29,7 +29,7 @@ def run_mms_convergence():
     fig = plt.figure()
     for idx, j in enumerate(compartments):
         fig.add_subplot(2, 2, idx + 1)
-        c = plot(P.sub(idx), vmin=vmin, vmax=vmax)
+        c = plot(Ph.sub(idx), vmin=vmin, vmax=vmax)
         plt.colorbar(c)
         plt.title(j)
 
