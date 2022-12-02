@@ -42,13 +42,21 @@ def solve_stationary(V, F, bcs, name="pressure"):
     solve(A, P.vector(), b)
     return P
 
+def solve_timestep(A, l: Form, u: Function, bcs):
+    b = assemble(l)
+    for bc in bcs:
+        bc.apply(A, b)
+    solve(A, u.vector(), b)
+    return u
 
-def process_boundaries_multicompartment(p, q, F, boundaries, V, compartments, domain):
+
+def process_boundaries_multicompartment(p, q, boundaries, V, compartments, domain):
     bcs = []
+    F_bdry = 0.0
     for idx_i, i in enumerate(compartments):
         bcs.extend(process_dirichlet(domain, V.sub(idx_i), boundaries[i]))
-        F -= process_boundary_forms(p[idx_i], q[idx_i], domain, boundaries[i])
-    return F, bcs
+        F_bdry -= process_boundary_forms(p[idx_i], q[idx_i], domain, boundaries[i])
+    return F_bdry, bcs
 
 
 def solve_pressure(domain, V, compartments, boundaries, params, source=None):
@@ -56,8 +64,8 @@ def solve_pressure(domain, V, compartments, boundaries, params, source=None):
     q = TestFunction(V)
     K, G = to_constant(params, "hydraulic_conductivity", "convective_fluid_transfer")
 
-    F = pressure_variational_form(p, q, compartments, K, G, source=source)
-    F, bcs = process_boundaries_multicompartment(p, q, F, boundaries, V, compartments, domain)
+    F_bdry, bcs = process_boundaries_multicompartment(p, q, boundaries, V, compartments, domain)
+    F = pressure_variational_form(p, q, compartments, K, G, source=source) + F_bdry
     return solve_stationary(V, F, bcs, "pressure")
 
 
@@ -88,23 +96,10 @@ def print_progress(t, T):
     print(f"[{'=' * progress}{' ' * (20 - progress)}] {t / 60:>6.1f}min / {T / 60:<5.1f}min", end="\r")
 
 
-def solve_solute(
-    c0, p, dt, T, domain, V, compartments, boundaries, params, results_path="../results/concentration/"
-):
-    c = TrialFunctions(V)
-    w = TestFunction(V)
-    phi, D, K, G, L = to_constant(
-        params,
-        "porosity",
-        "effective_diffusion",
-        "hydraulic_conductivity",
-        "convective_solute_transfer",
-        "diffusive_solute_transfer",
-    )
-
-    # TODO: Collect variational form into function
+def solute_variational_form(trial, test, compartments, p, C0, phi, D, K, G, L, source=None):
+    c = trial
+    w = test
     F = 0.0
-    C0 = project(c0, V)
     for idx_j, j in enumerate(compartments):
         F += (c[idx_j] - C0[idx_j]) * w[idx_j] * dx
         F += (
@@ -122,10 +117,44 @@ def solve_solute(
             ) / phi[j]
         F -= dt * sj * w[idx_j] * dx
 
-    bcs = []
-    for idx_i, i in enumerate(compartments):
-        bcs.extend(process_dirichlet(domain, V.sub(idx_i), boundaries[i]))
-        F -= dt * process_boundary_forms(c[idx_i], w[idx_i], domain, boundaries[i])
+    if source is not None:
+        F -= sum([source[j] * w[idx] for idx, j in enumerate(compartments)]) * dx
+
+    return F
+
+def update_time(expr, newtime):
+    if hasattr(expr, "t"):
+        expr.t.assign(newtime)
+
+
+def solve_solute(
+    c0,
+    p,
+    dt,
+    T,
+    domain,
+    V,
+    compartments,
+    boundaries,
+    params,
+    results_path="../results/concentration/",
+    source=None,
+):
+    c = TrialFunctions(V)
+    w = TestFunction(V)
+    phi, D, K, G, L = to_constant(
+        params,
+        "porosity",
+        "effective_diffusion",
+        "hydraulic_conductivity",
+        "convective_solute_transfer",
+        "diffusive_solute_transfer",
+    )
+
+    C0 = project(c0, V)
+    F = solute_variational_form(c, w, compartments, p, C0, phi, D, K, G, L, source=source)
+
+    F, bcs = process_boundaries_multicompartment(c, w, F, boundaries, V, compartments, domain)
     a = lhs(F)
     l = rhs(F)
     A = assemble(a)
@@ -133,21 +162,18 @@ def solve_solute(
     storage = TimeSeriesStorage("w", results_path, mesh=domain.mesh, V=V)
     t = Constant(0.0)
     storage.write(C0, t)
-    mass = np.nan * np.zeros(int(T / dt) + 1)
+
     idx = 0
+    mass = np.nan * np.zeros(int(T / dt) + 1)
     mass[idx] = total_mass(C0, phi, compartments)
+
     C = Function(V, name="concentration")
     while float(t) < T:
         print_progress(float(t), T)
-        A = assemble(a)
-        b = assemble(l)
-        for bc in bcs:
-            bc.apply(A, b)
-            solve(A, C.vector(), b)
+        C = solve_timestep(A, l, C, bcs)
         C0.assign(C)
         t.assign(t + dt)
         storage.write(C, t)
-
         idx += 1
         mass[idx] = total_mass(C0, phi, compartments)
     storage.close()
