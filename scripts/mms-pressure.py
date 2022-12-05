@@ -1,4 +1,5 @@
 from collections import defaultdict
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,19 +27,35 @@ def run_mms_convergence():
     vmin = Ph.vector().min()
     vmax = Ph.vector().max()
 
+    savepath = (Path(__file__).parent / "../results/mms").resolve()
+    savepath.mkdir(exist_ok=True)
+
     fig = plt.figure()
     for idx, j in enumerate(compartments):
         fig.add_subplot(2, 2, idx + 1)
         c = plot(Ph.sub(idx), vmin=vmin, vmax=vmax)
         plt.colorbar(c)
         plt.title(j)
+    plt.savefig(savepath / "pressure-distr.png")
 
+    hvec = np.array(hvec)
     plt.figure()
-    plt.title("Error Convergence")
-    plt.loglog(hvec, E, "o-")
+    # plt.title("Error Convergence")
+    plt.loglog(hvec, E, "o-", markeredgecolor='k')
     plt.xlabel("$h$")
     plt.ylabel("$||p - p_h||_{H^1}$")
+
+    xlim, ylim = plt.gca().get_xlim(), plt.gca().get_ylim()
+    plt.autoscale(False)
+    plt.loglog([1e-2, 1e0], [1e-3, 1e1], 'k--', lw=0.5, label="Quadratic")
+    # plt.loglog([1e-2, 1e0], [1e-4, 1e-2], 'k--', lw=0.5, label="Linear")
+    plt.xlim(xlim)
+    plt.ylim(ylim)
+    plt.legend()
+    plt.savefig(savepath / "convergence.png")
     plt.show()
+
+    return hvec, E
 
 
 if __name__ == "__main__":
