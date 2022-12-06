@@ -11,7 +11,7 @@ from multirat.timeseriesstorage import TimeSeriesStorage
 
 def pressure_variational_form(trial, test, compartments, K, G, source=None):
     """
-    source: dictionary of source termszs labeled by compartment.
+    source: dictionary of source termss labeled by compartment.
     """
     p = trial
     q = test
@@ -96,30 +96,24 @@ def print_progress(t, T):
     print(f"[{'=' * progress}{' ' * (20 - progress)}] {t / 60:>6.1f}min / {T / 60:<5.1f}min", end="\r")
 
 
-def solute_variational_form(trial, test, compartments, p, C0, phi, D, K, G, L, source=None):
+def solute_variational_form(trial, test, compartments, dt, c0, p, D, K, L, G, phi, source=None):
     c = trial
     w = test
     F = 0.0
-    for idx_j, j in enumerate(compartments):
-        F += (c[idx_j] - C0[idx_j]) * w[idx_j] * dx
-        F += (
-            dt
-            * (inner(D[j] * grad(c[idx_j]) + K[j] / phi[j] * c[idx_j] * grad(p[idx_j]), grad(w[idx_j])))
-            * dx
-        )
+    for idj, j in enumerate(compartments):
+        F += (c[idj] - c0[idj]) * w[idj] * dx
+        F += dt * (inner(D[j] * grad(c[idj]) + K[j] / phi[j] * c[idj] * grad(p[idj]), grad(w[idj]))) * dx
         sj = 0.0
-        for idx_i, i in enumerate(compartments):
-            if idx_i == idx_j:
+        for idi, i in enumerate(compartments):
+            if idi == idj:
                 continue
             sj += (
-                L[(i, j)] * (c[idx_i] - c[idx_j])
-                + G[(i, j)] * (p[idx_i] - p[idx_j]) * (0.5 * (c[idx_i] + c[idx_j]))
+                L[(i, j)] * (c[idi] - c[idj])
+                + G[(i, j)] * (p[idi] - p[idj]) * (0.5 * (c[idi] + c[idj]))
             ) / phi[j]
-        F -= dt * sj * w[idx_j] * dx
-
-    if source is not None:
-        F -= sum([source[j] * w[idx] for idx, j in enumerate(compartments)]) * dx
-
+        F -= dt * sj * w[idj] * dx
+        if source is not None:
+            F -= dt * source[j] * w[idj] * dx
     return F
 
 def update_time(expr, newtime):

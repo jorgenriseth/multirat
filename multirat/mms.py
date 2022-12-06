@@ -14,6 +14,8 @@ from dolfin import (
     div,
     grad,
     inner,
+    errornorm,
+    interpolate
 )
 
 from multirat.boundary import DirichletBoundary, RobinBoundary
@@ -41,9 +43,9 @@ def mms_bump(a: float, p0: float):
     return p_sym
 
 
-def expr(exp, degree):
+def expr(exp, degree, **kwargs):
     v = mms_placeholder()
-    return ulfy.Expression(v, subs={v: exp}, degree=degree)
+    return ulfy.Expression(v, subs={v: exp}, degree=degree, **kwargs)
 
 
 def mms_sources(p, K, gamma, degree):
@@ -54,15 +56,7 @@ def mms_sources(p, K, gamma, degree):
 
 
 def mms_parameters():
-    K = defaultdict(lambda: 1.0)
-    gamma = defaultdict(lambda: 1.0)
-    L_bdry = defaultdict(lambda: 1.0)
-    parameters = {
-        "hydraulic_conductivity": K,
-        "convective_fluid_transfer": gamma,
-        "hydraulic_conductivity_bdry": L_bdry,
-    }
-    return parameters
+    return defaultdict(lambda: defaultdict(lambda: 1.0))
 
 
 def mms_placeholder():
@@ -71,15 +65,15 @@ def mms_placeholder():
     return Function(V_)
 
 
-def mms_robin_boundary(pj, alpha, normals, degree):
+def mms_robin_boundary(p, alpha, normals, degree):
     p_ = mms_placeholder()
     gR = {tag: p_ + 1.0 / alpha * inner(grad(p_), n) for tag, n in normals.items()}
-    gR = {tag: ulfy.Expression(gR[tag], subs={p_: pj}, degree=degree) for tag in gR}
+    gR = {tag: ulfy.Expression(gR[tag], subs={p_: p}, degree=degree) for tag in gR}
     return [RobinBoundary(alpha, gR[tag], tag) for tag in gR]
 
 
-def mms_dirichlet_boundary(pj, degree):
-    return [DirichletBoundary(expr(pj, degree), "everywhere")]
+def mms_dirichlet_boundary(p, degree, **kwargs):
+    return [DirichletBoundary(expr(p, degree, **kwargs), "everywhere")]
 
 
 def mms_setup(func: str, degree=4):
@@ -113,3 +107,43 @@ def mms_setup(func: str, degree=4):
         "pv": mms_dirichlet_boundary(p["pv"], degree=degree),
     }
     return p_expr, f, boundaries, parameters, subdomains, compartments
+
+
+def solute_transfer(c_, p_, L, G, phi):
+    s = {}
+    for j in c_:
+        s[j] = 0.0
+        for i in c_:
+            if i == j:
+                continue
+            s[j] += L[(i, j)] * (c_[i] - c_[j]) + 0.5 * G[(i, j)] * (c_[i] + c_[j]) * (p_[i] - p_[j])
+    return s
+
+def solute_sources(c, p, time, K, phi, D, L, G, degree):
+    c_ = {j: mms_placeholder() for j in c}
+    dcdt_ = {j: mms_placeholder() for j in c}
+    p_ = {j: mms_placeholder() for j in c}
+    s = solute_transfer(c_, p_, L, G, phi)
+    f = {
+        j: dcdt_[j] - (K[j] / phi[j] * div(c_[j] * grad(p_[j]))) - (D[j] * div(grad(c_[j]))) - s[j] / phi[j] for j in c
+    }
+    subs = {
+        **{dcdt_[j]: sp.diff(c[j], "t") for j in c},
+        **{c_[j]: c[j] for j in c},
+        **{p_[j]: p[j] for j in c},
+    }
+    return {i: ulfy.Expression(f[i], subs=subs, degree=degree, t=time) for i in c}
+
+
+def mms_solute_quadratic(a, T):
+    c0 = a / 2.0
+    t, x, y = sp.symbols("t x y")
+    c_sym = a * (1.0 - t / T) * (x ** 2 + y ** 2) + c0
+    return c_sym
+
+def trapezoid_internal(f, h):
+    return h * (0.5 * (f[0] + f[-1]) + f[1:-1].sum())
+
+def multicomp_errornorm(u, uh, compartments, norm="H1"):
+    Vhigh = FunctionSpace(uh.function_space().mesh(), "CG", 5)
+    return sum([errornorm(interpolate(u[j], Vhigh), uh.sub(idx), norm) for idx, j in enumerate(compartments)])
