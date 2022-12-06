@@ -26,7 +26,6 @@ def solve_diffusion_problem(problem: BaseDiffusionProblem, results_path, compute
         problem.pre_solve()  # Possible updates to be performed before solving the system.
         problem.solve()
 
-        # print(problem.time.t)
         storage.write(problem.u, problem.time.t)
         computer.compute(problem)
 
@@ -35,3 +34,4 @@ def solve_diffusion_problem(problem: BaseDiffusionProblem, results_path, compute
 
     storage.close()
     print()
+    return computer

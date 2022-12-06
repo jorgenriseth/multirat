@@ -7,6 +7,14 @@ import numpy as np
 from dolfin import Function, FunctionSpace, HDF5File, Mesh, XDMFFile
 
 
+class DummyStorage:
+    def write(self, u, t):
+        pass
+
+    def close(self):
+        pass
+
+
 class TimeSeriesStorage:
     """TODO:
     * Add a name-tag for functions
