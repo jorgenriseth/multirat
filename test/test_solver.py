@@ -1,5 +1,4 @@
 import logging
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -7,14 +6,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dolfin import *
 
-from multirat.boundary import process_boundary_forms
-from multirat.mms import (mms_domain, mms_setup, mms_quadratic, mms_solute_quadratic, solute_sources,
-expr, mms_parameters, mms_dirichlet_boundary,trapezoid_internal, multicomp_errornorm,)
-from multirat.multicompartment import (pressure_functionspace, solve_pressure, solute_variational_form, process_boundaries_multicompartment,
-print_progress, solve_timestep)
-from multirat.utils import assign_mixed_function
+from multirat.computers import BaseComputer
+from multirat.mms import (
+    expr,
+    mms_dirichlet_boundary,
+    mms_domain,
+    mms_parameters,
+    mms_quadratic,
+    mms_setup,
+    mms_solute_quadratic,
+    multicomp_errornorm,
+    solute_sources,
+    trapezoid_internal,
+)
+from multirat.multicompartment import pressure_functionspace, solve_pressure, solve_solute
 from multirat.parameters import to_constant
-
+from multirat.timekeeper import TimeKeeper
+from multirat.utils import assign_mixed_function
 
 LOGGER = logging.getLogger()
 
@@ -45,9 +53,13 @@ def test_pressure_solver():
     assert abs(P.vector()[:] - Ph.vector()[:]).max() < 1e-10
 
 
+class ErrorComputer(BaseComputer):
+    def __init__(self, c_expr, compartments):
+        super().__init__({"errornorm": lambda c: multicomp_errornorm(c_expr, c, compartments, "H1")})
+
+
 def test_concentration_solver():
     degree = 4
-    normals = {1: Constant((-1, 0)), 2: Constant((1, 0)), 3: Constant((0, -1)), 4: Constant((0, 1))}
     subdomains = {
         1: CompiledSubDomain("near(x[0], -1)"),
         2: CompiledSubDomain("near(x[0], 1)"),
@@ -73,11 +85,10 @@ def test_concentration_solver():
     p0 = {"pa": 1.0, "pc": 0.5, "pv": 0.0}
     p_sym = {j: mms_quadratic(ap[j], p0[j]) for j in compartments}
 
-
     ac = {"pa": -1.0, "pc": -0.5, "pv": -0.2}
     c = {j: mms_solute_quadratic(ac[j], T=endtime) for j in compartments}
 
-    time = Constant(0.0)
+    time = TimeKeeper(dt, endtime)
     f = solute_sources(c, p_sym, time, K, phi, D, L, G, degree)
     c_expr = {j: expr(c[j], degree=degree, t=time) for j in compartments}
     p_expr = {j: expr(p_sym[j], degree=degree) for j in compartments}
@@ -88,41 +99,9 @@ def test_concentration_solver():
     p = assign_mixed_function(p_expr, V, compartments)
     C0 = assign_mixed_function(c_expr, V, compartments)
 
-    c = TrialFunctions(V)
-    w = TestFunction(V)
-    phi, D, K, G, L = to_constant(
-        params,
-        "porosity",
-        "effective_diffusion",
-        "hydraulic_conductivity",
-        "convective_solute_transfer",
-        "diffusive_solute_transfer",
-    )
-    F_bdry, bcs = process_boundaries_multicompartment(c, w, boundaries, V, compartments, domain)
-    F = solute_variational_form(c, w, compartments, dt, C0, p, D, K, L, G, phi, source=f) - dt * F_bdry
-    
-    a = lhs(F)
-    l = rhs(F)
-    A = assemble(a)
-
-    Ch = Function(V, name="concentration")
-    errs = np.nan * np.zeros(100)
-    idx = 0
-    errs[idx] = multicomp_errornorm(c_expr, C0, compartments, "H1")
-    while float(time) <= endtime:
-        time.assign(time + dt)
-        print_progress(float(time), endtime)
-        Ch = solve_timestep(A, l, Ch, bcs)
-        C0.assign(Ch)
-
-        C0_ = assign_mixed_function(c_expr, V, compartments)
-        err = abs(Ch.vector()[:] - C0_.vector()[:]).max()
-        print(err)
-        idx+=1
-        errs[idx] = multicomp_errornorm(c_expr, C0, compartments, "H1")
-
-    errs = errs[~np.isnan(errs)]    
-    temporal_error = np.sqrt(trapezoid_internal(errs**2, dt))
+    computer = ErrorComputer(c_expr, compartments)
+    solve_solute(C0, p, time, domain, V, compartments, boundaries, params, source=f, computer=computer)
+    temporal_error = np.sqrt(trapezoid_internal(computer["errornorm"] ** 2, dt))
     assert temporal_error < 1e-10
 
 

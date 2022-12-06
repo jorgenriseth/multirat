@@ -1,9 +1,7 @@
-from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import ulfy
 from dolfin import *
 
 from multirat.mms import mms_domain, mms_setup
@@ -21,7 +19,9 @@ def run_mms_convergence():
         V = pressure_functionspace(domain.mesh, 1, compartments)
         Ph = solve_pressure(domain, V, compartments, boundaries, parameters, source=f)
         P = assign_mixed_function(p_expr, V, compartments)
-        E.append(errornorm(P, Ph, "H1"))  # TODO: Replace by custom function, NOT interpolating onto V
+        E.append(
+            errornorm(P, Ph, norm_type="H1")
+        )  # TODO: Replace by custom function, NOT interpolating onto V
         hvec.append(domain.mesh.hmax())
 
     vmin = Ph.vector().min()
@@ -41,13 +41,13 @@ def run_mms_convergence():
     hvec = np.array(hvec)
     plt.figure()
     # plt.title("Error Convergence")
-    plt.loglog(hvec, E, "o-", markeredgecolor='k')
+    plt.loglog(hvec, E, "o-", markeredgecolor="k")
     plt.xlabel("$h$")
     plt.ylabel("$||p - p_h||_{H^1}$")
 
     xlim, ylim = plt.gca().get_xlim(), plt.gca().get_ylim()
     plt.autoscale(False)
-    plt.loglog([1e-2, 1e0], [1e-3, 1e1], 'k--', lw=0.5, label="Quadratic")
+    plt.loglog([1e-2, 1e0], [1e-3, 1e1], "k--", lw=0.5, label="Quadratic")
     # plt.loglog([1e-2, 1e0], [1e-4, 1e-2], 'k--', lw=0.5, label="Linear")
     plt.xlim(xlim)
     plt.ylim(ylim)

@@ -12,10 +12,10 @@ from dolfin import (
     RectangleMesh,
     UnitSquareMesh,
     div,
+    errornorm,
     grad,
     inner,
-    errornorm,
-    interpolate
+    interpolate,
 )
 
 from multirat.boundary import DirichletBoundary, RobinBoundary
@@ -119,13 +119,15 @@ def solute_transfer(c_, p_, L, G, phi):
             s[j] += L[(i, j)] * (c_[i] - c_[j]) + 0.5 * G[(i, j)] * (c_[i] + c_[j]) * (p_[i] - p_[j])
     return s
 
+
 def solute_sources(c, p, time, K, phi, D, L, G, degree):
     c_ = {j: mms_placeholder() for j in c}
     dcdt_ = {j: mms_placeholder() for j in c}
     p_ = {j: mms_placeholder() for j in c}
     s = solute_transfer(c_, p_, L, G, phi)
     f = {
-        j: dcdt_[j] - (K[j] / phi[j] * div(c_[j] * grad(p_[j]))) - (D[j] * div(grad(c_[j]))) - s[j] / phi[j] for j in c
+        j: dcdt_[j] - (K[j] / phi[j] * div(c_[j] * grad(p_[j]))) - (D[j] * div(grad(c_[j]))) - s[j] / phi[j]
+        for j in c
     }
     subs = {
         **{dcdt_[j]: sp.diff(c[j], "t") for j in c},
@@ -141,8 +143,10 @@ def mms_solute_quadratic(a, T):
     c_sym = a * (1.0 - t / T) * (x ** 2 + y ** 2) + c0
     return c_sym
 
+
 def trapezoid_internal(f, h):
     return h * (0.5 * (f[0] + f[-1]) + f[1:-1].sum())
+
 
 def multicomp_errornorm(u, uh, compartments, norm="H1"):
     Vhigh = FunctionSpace(uh.function_space().mesh(), "CG", 5)

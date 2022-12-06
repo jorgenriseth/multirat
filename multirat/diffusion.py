@@ -34,3 +34,4 @@ def solve_diffusion_problem(problem: BaseDiffusionProblem, results_path, compute
 
     storage.close()
     print()
+    return computer

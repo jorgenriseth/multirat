@@ -7,10 +7,10 @@ from dolfin import (
     TrialFunction,
     assemble,
     dx,
+    grad,
+    inner,
     project,
     solve,
-    inner,
-    grad,
 )
 
 
