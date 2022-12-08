@@ -10,6 +10,7 @@ mmHg = ureg.mmHg
 kg = ureg.kg
 Pa = ureg.Pa
 m = ureg.m
+cm = ureg.cm
 mm = ureg.mm
 um = ureg.um
 nm = ureg.nm
@@ -61,7 +62,7 @@ BASE_PARAMETERS = {
     "csf_renewal_rate": 0.01,
     "human_brain_volume": 1.0e6 * mm ** 3,
     "human_brain_surface_area": 1.750e2 * mm ** 2,
-    "diffusion_coefficient_free": {"inulin": 2.98e-4 * mm ** 2 / s, "amyloid_beta": 1.8e-4 * mm ** 2 / s},
+    "diffusion_coefficient_free": {"inulin": 2.98e-6 * cm ** 2 / s, "amyloid_beta": 1.8e-4 * mm ** 2 / s},
     "pressure_boundary": {
         "arteries": 60.0 * mmHg,
         "veins": 7.0 * mmHg,
@@ -72,18 +73,19 @@ BASE_PARAMETERS = {
     "tortuosity": 1.7,
     "osmotic_pressure": {"blood": 20.0 * mmHg},
     "osmotic_pressure_fraction": {
-        "csf": 0.2  # # Osm. press. computed as this constant * osmotic_pressure-blood
+        "csf": 0.2  # Osmotic pressure computed as this constant * osmotic_pressure-blood
     },
-    "osmotic_reflection": {"inulin": {"membranes": 0.2, "connected": 0.0}},
+    "osmotic_reflection": {"inulin": {"aef": 0.2, "connected": 1.0, "bbb": 1.0}},
     "porosity": {"ecs": 0.14},
     "vasculature_volume_fraction": 0.0329,
-    "vasculature_fraction": {"arteries": 0.2, "capillaries": 0.1, "veins": 0.7},
-    "pvs_volume_fraction": 0.003,
-    "viscosity": {"blood": 2.67e-3 * Pa * s, "csf": 8.3e-4 * Pa * s},
+    "vasculature_fraction": {"arteries": 0.21, "capillaries": 0.33, "veins": 0.46},
+    "pvs_volume_fraction": 0.01,
+    "viscosity": {"blood": 2.67e-3 * Pa * s, "csf": 7.0e-4 * Pa * s},
     "permeability": {"ecs": 2.0e-11 * mm ** 2},
     "hydraulic_conductivity": {
         "arteries": 1.234 * mm ** 3 * s / kg,
-        "capillaries": 4.28e-4 * mm ** 3 * s / kg,
+        # "capillaries": 4.28e-4 * mm ** 3 * s / kg,
+        "capillaries": 3.3e-3 * mm ** 3 * s / kg,
         "veins": 2.468 * mm ** 3 * s / kg,
         ("ecs", "arteries"): 9.1e-10 * mm / (Pa * s),
         ("ecs", "capillaries"): 1.0e-10 * mm / (Pa * s),
@@ -94,7 +96,7 @@ BASE_PARAMETERS = {
         ("ecs", "capillaries"): 9.0 / mm,
         ("ecs", "veins"): 3.0 / mm,
     },
-    "flowrate": {"blood": 2.4 * mL / minute, "csf": 3.33 * mm ** 3 / s},
+    "flowrate": {"blood": 2.32 * mL / minute, "csf": 3.38 * mm ** 3 / minute},
     "pressure_drop": {
         ("arteries", "capillaries"): 40.0 * mmHg,
         ("capillaries", "veins"): 13.0 * mmHg,
@@ -104,7 +106,7 @@ BASE_PARAMETERS = {
     "resistance": {
         "ecs": 0.57 * mmHg / (mL / minute),
         "pvs_arteries": 1.14 * mmHg / (mL / minute),
-        "pvs_capillaries": 32.4 * mmHg / (mL / minute),
+        "pvs_capillaries": 32.24 * mmHg / (mL / minute),
         "pvs_veins": 1.75e-3 * mmHg / (mL / minute),
     },
     "resistance_interface": {
@@ -112,7 +114,7 @@ BASE_PARAMETERS = {
         ("ecs", "pvs_veins"): 0.64 * mmHg / (mL / minute),
         ("pvs_capillaries", "capillaries"): 125.31 * mmHg / (mL / minute),
     },
-    "diameter": {"arteries": 50.0 * um, "capillaries": 10.0 * um, "veins": 50.0 * um},
+    "diameter": {"arteries": 38.0 * um, "capillaries": 10.0 * um, "veins": 38.0 * um},
     "solute_radius": {"inulin": 15.2e-7 * mm, "amyloid_beta": 0.9 * nm},
     ###################################################################
     # Related to permeability of BBB. Since this work is restricted to inulin, only AEF is of interest.
@@ -341,8 +343,8 @@ def get_hydraulic_conductivity(params):
 
 def get_convective_fluid_transfer(params):
     T = {}
-    V = params["human_brain_volume"]
     for vi in SHARED_PARAMETERS["blood"]:
+        V = params["human_brain_volume"]
         L_ecs_vi = params["hydraulic_conductivity"][("ecs", vi)]
         surface_ratio = params["surface_volume_ratio"][("ecs", vi)]
         T_ecs_vi = L_ecs_vi * surface_ratio
@@ -360,9 +362,10 @@ def get_convective_fluid_transfer(params):
 
     # Compute connected transfer coefficients.
     for vi, vj in SHARED_PARAMETERS["connected_blood"]:
+        V = params["brain_volume"]
         Q = params["flowrate"]
         dp = params["pressure_drop"]
-        T[(vi, vj)] = compute_connected_fluid_transfer(params["brain_volume"], Q["blood"], dp[(vi, vj)])
+        T[(vi, vj)] = compute_connected_fluid_transfer(V, Q["blood"], dp[(vi, vj)])
         T[(pvs(vi), pvs(vj))] = compute_connected_fluid_transfer(V, Q["csf"], dp[(pvs(vi), pvs(vj))])
     for i, j in SHARED_PARAMETERS["disconnected"]:
         T[(i, j)] = 0.0 * 1 / (Pa * s)
@@ -392,14 +395,7 @@ def get_osmotic_pressure(params):
 
 
 def get_osmotic_reflection(params, solute):
-    sigma = {}
-    for interface in SHARED_PARAMETERS["membranes"]:
-        sigma[interface] = params["osmotic_reflection"][solute]["membranes"]
-
-    for interface in SHARED_PARAMETERS["connected"]:
-        # TODO: Verify correctness here as well.
-        sigma[interface] = params["osmotic_reflection"][solute]["connected"]
-
+    sigma = distribute_subset_parameters(params["osmotic_reflection"], SHARED_PARAMETERS)[solute]
     for interface in SHARED_PARAMETERS["disconnected"]:
         sigma[interface] = 0.0
     return sigma
@@ -429,7 +425,6 @@ def diffusive_permeabilities_inulin(params):
 def diffusive_resistance_aef_inulin(params, vessel):
     D_free = params["diffusion_coefficient_free"]["inulin"]
     membranes = params["membranes"]
-
     thickness = membranes["thickness"]["aef"]
     B_aef = membranes["elementary_radius"]["aef"][vessel]
     solute_radius = params["solute_radius"]["inulin"]
@@ -459,7 +454,6 @@ def get_diffusive_solute_transfer_inulin(params):
 
 
 def get_boundary_hydraulic_permeabilities(p):
-    # FIXME: There seems to be an error with the arterial hydraulic cond.
     dp = p["pressure_drop"]
     Q = p["flowrate"]["blood"]
     Ra = dp[("arteries", "capillaries")] / Q
@@ -516,7 +510,6 @@ def diffusive_permeabilities(params, solute):
     # Assume purely convection-driven transport between connected compartments.
     for i, j in SHARED_PARAMETERS["connected"]:
         P[(i, j)] = 0.0 * mm / s
-
     return {key: val.to("mm / s") for key, val in P.items()}
 
 
