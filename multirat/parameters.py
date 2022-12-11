@@ -75,7 +75,7 @@ BASE_PARAMETERS = {
     "osmotic_pressure_fraction": {
         "csf": 0.2  # Osmotic pressure computed as this constant * osmotic_pressure-blood
     },
-    "osmotic_reflection": {"inulin": {"aef": 0.2, "connected": 1.0, "bbb": 1.0}},
+    "osmotic_reflection": {"inulin": {"aef": 0.2, "connected_blood": 1.0, "bbb": 1.0, "connected_pvs": 0.0}},
     "porosity": {"ecs": 0.14},
     "vasculature_volume_fraction": 0.0329,
     "vasculature_fraction": {"arteries": 0.21, "capillaries": 0.33, "veins": 0.46},
@@ -468,6 +468,11 @@ def get_boundary_hydraulic_permeabilities(p):
     L_bdry["pvs_arteries"] = gamma[("ecs", "pvs_arteries")] * V / S
     L_bdry["arteries"] = 1.0 / (Ra * S)
     return {key: value.to("mm / (Pa * s)") for key, value in L_bdry.items()}
+
+def get_arterial_inflow(params):
+    B = params["flowrate"]["blood"]
+    S = params["ratbrain_surface_area"]
+    return B / S
 
 
 def compute_parameters(params):

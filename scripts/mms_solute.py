@@ -90,6 +90,8 @@ def run_mms_solute_convergence():
     plt.savefig(savepath / "convergence-concentration.png")
     plt.show()
 
+    return hvec, E 
+
 
 if __name__ == "__main__":
     run_mms_solute_convergence()

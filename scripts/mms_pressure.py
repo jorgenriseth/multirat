@@ -4,18 +4,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dolfin import *
 
+from multirat.parameters import multicompartment_parameters
 from multirat.mms import mms_domain, mms_setup
 from multirat.multicompartment import pressure_functionspace, solve_pressure
 from multirat.utils import assign_mixed_function
 
 
-def run_mms_convergence():
-    p_expr, f, boundaries, parameters, subdomains, compartments = mms_setup("bump")
+def run_mms_convergence(Nmax=6):
+    p_expr, f, boundaries, parameters, subdomains, compartments = mms_setup("bump", "realistic")
     E = []
     hvec = []
-    for N in [1, 2, 3, 4, 5, 6, 7, 8]:
-        N = 2 ** N
-        domain = mms_domain(N, subdomains)
+    for N in range(1, Nmax+1):
+        domain = mms_domain(2**N, subdomains)
         V = pressure_functionspace(domain.mesh, 1, compartments)
         Ph = solve_pressure(domain, V, compartments, boundaries, parameters, source=f)
         P = assign_mixed_function(p_expr, V, compartments)

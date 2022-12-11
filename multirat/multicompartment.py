@@ -129,11 +129,11 @@ class MassComputer(BaseComputer):
 
 def get_storage(results_path, mesh, V):
     if results_path is not None:
-        storage = TimeSeriesStorage("w", results_path, mesh=mesh, V=V)
+        return TimeSeriesStorage("w", results_path, mesh=mesh, V=V)
     return DummyStorage()
 
 
-def visualize(storage):
+def visualize(storage, compartments):
     if isinstance(storage, DummyStorage):
         return
     visual = TimeSeriesStorage("r", storage.filepath)
@@ -180,5 +180,5 @@ def solve_solute(
         storage.write(C, float(time))
         computer.compute(time, C)
     storage.close()
-    visualize(storage)
+    visualize(storage, compartments)
     print()
