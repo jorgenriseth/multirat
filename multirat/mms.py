@@ -21,6 +21,7 @@ from dolfin import (
 from multirat.boundary import DirichletBoundary, RobinBoundary
 from multirat.meshprocessing import Domain
 from multirat.utils import assign_mixed_function
+from multirat.parameters import multicompartment_parameters
 
 
 def mms_domain(N, subboundaries):
@@ -76,7 +77,7 @@ def mms_dirichlet_boundary(p, degree, **kwargs):
     return [DirichletBoundary(expr(p, degree, **kwargs), "everywhere")]
 
 
-def mms_setup(func: str, degree=4):
+def mms_setup(func: str, parameters: str, degree=4):
     normals = {1: Constant((-1, 0)), 2: Constant((1, 0)), 3: Constant((0, -1)), 4: Constant((0, 1))}
     subdomains = {
         1: CompiledSubDomain("near(x[0], -1)"),
@@ -84,9 +85,20 @@ def mms_setup(func: str, degree=4):
         3: CompiledSubDomain("near(x[1], -1)"),
         4: CompiledSubDomain("near(x[1], 1)"),
     }
-    compartments = ["e", "pa", "pc", "pv"]
-    a = {"e": -0.25, "pa": -1.0, "pc": 0.0, "pv": -1.0}
-    p0 = {"e": 0.6, "pa": 1.0, "pc": 0.55, "pv": 0.0}
+    compartments = ["ecs", "pvs_arteries", "pvs_capillaries", "pvs_veins"]
+
+    if parameters == "realistic":
+        parameters = multicompartment_parameters(compartments)
+    elif parameters == "dummy":
+        parameters = mms_parameters()
+    else:
+        raise ValueError("parameters should be 'realistic' or 'dummy'")
+    K = parameters["hydraulic_conductivity"]
+    gamma = parameters["convective_fluid_transfer"]
+    L_bdry = parameters["hydraulic_conductivity_bdry"]
+
+    a = {"ecs": -0.25, "pvs_arteries": -1.0, "pvs_capillaries": 0.0, "pvs_veins": -1.0}
+    p0 = {"ecs": 0.6, "pvs_arteries": 1.0, "pvs_capillaries": 0.55, "pvs_veins": 0.0}
     if func == "quadratic":
         p = {j: mms_quadratic(a[j], p0[j]) for j in compartments}
     elif func == "bump":
@@ -101,10 +113,10 @@ def mms_setup(func: str, degree=4):
     p_expr = {i: expr(p[i], degree=degree) for i in p}
     f = mms_sources(p, K, gamma, degree=degree)
     boundaries = {
-        "e": mms_robin_boundary(p["e"], -L_bdry["pa"] / K["pa"], normals, degree=degree),
-        "pa": mms_robin_boundary(p["pa"], -L_bdry["pa"] / K["pa"], normals, degree=degree),
-        "pc": [],  # Homogeneous Neumann,
-        "pv": mms_dirichlet_boundary(p["pv"], degree=degree),
+        "ecs": mms_robin_boundary(p["ecs"], -L_bdry["pvs_arteries"] / K["pvs_arteries"], normals, degree=degree),
+        "pvs_arteries": mms_robin_boundary(p["pvs_arteries"], -L_bdry["pvs_arteries"] / K["pvs_arteries"], normals, degree=degree),
+        "pvs_capillaries": [],  # Homogeneous Neumann,
+        "pvs_veins": mms_dirichlet_boundary(p["pvs_veins"], degree=degree),
     }
     return p_expr, f, boundaries, parameters, subdomains, compartments
 
