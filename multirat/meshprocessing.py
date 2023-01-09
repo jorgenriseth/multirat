@@ -62,7 +62,7 @@ def meshfunction_default_value(meshfunction, value: int = 0):
 
 def mesh2xdmf(meshfile, xdmfdir, dim=2):
     mesh = meshio.read(meshfile)
-    return meshio2xdmf(mesh, xdmfdir, dim=2)
+    return meshio2xdmf(mesh, xdmfdir, dim=dim)
 
 
 def meshio2xdmf(mesh, xdmfdir, dim=2):
@@ -85,14 +85,15 @@ def meshio2xdmf(mesh, xdmfdir, dim=2):
     # Write the mesh into new xdmf file
     meshdata = meshio.Mesh(points, polytopes)
     meshio.write("{}/mesh.xdmf".format(xdmfdir), meshdata)
-    if "gmsh:physical" in mesh.cell_data_dict:
+    if "gmsh:physical" or "medit:ref" in mesh.cell_data_dict:
+        cell_data_name = "gmsh:physical" if "gmsh:physical" in mesh.cell_data_dict else "medit:ref"
         # Write the subdomains of the mesh
-        subdomains = {"subdomains": [mesh.cell_data_dict["gmsh:physical"][polytope_label]]}
+        subdomains = {"subdomains": [mesh.cell_data_dict[cell_data_name][polytope_label]]}
         subdomainfile = meshio.Mesh(points, polytopes, cell_data=subdomains)
         meshio.write("{}/subdomains.xdmf".format(xdmfdir), subdomainfile)
 
         # Write the boundaries/interfaces of the mesh
-        boundaries = {"boundaries": [mesh.cell_data_dict["gmsh:physical"][facet_label]]}
+        boundaries = {"boundaries": [mesh.cell_data_dict[cell_data_name][facet_label]]}
         boundaryfile = meshio.Mesh(points, facets, cell_data=boundaries)
         meshio.write("{}/boundaries.xdmf".format(xdmfdir), boundaryfile)
 
@@ -191,8 +192,6 @@ def stl2hdf(
         tmppath / "meshfile.mesh", outfile, dim=3, tmpdir=tmpdir
     )  # Dont think stls will be relevant in 2-dim case
 
-    if tmpdir == "/tmp/ratbrain":
-        clean_tmp(tmppath, "meshfile.mesh")
 
 
 def create_tmpdir(tmpdir):
