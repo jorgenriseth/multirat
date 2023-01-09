@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import List
 
 import numpy as np
 from dolfin import *
@@ -33,7 +34,7 @@ def pressure_variational_form(trial, test, compartments, K, G, source=None):
     return F
 
 
-def solve_stationary(V, F, bcs, name="pressure"):
+def solve_stationary(V: FunctionSpace, F: Form, bcs: List[DirichletBC], name: str = "pressure"):
     A = assemble(lhs(F))
     b = assemble(rhs(F))
     P = Function(V, name=name)
@@ -182,3 +183,21 @@ def solve_solute(
     storage.close()
     visualize(storage, compartments)
     print()
+    return C
+
+
+def compartment_mass_flux_density(cj, pj, Kj, phi_j, Dj):
+    return -Kj * cj * grad(pj) - phi_j * Dj * grad(cj)
+
+
+def mass_flux_density(c, p, compartments, K, phi, D):
+    return sum(
+        [
+            compartment_mass_flux_density(c[idj], p[idj], K[j], phi[j], D[j])
+            for idj, j in enumerate(compartments)
+        ]
+    )
+
+
+def mass_total(c, phi, compartments):
+    return sum([assemble(phi[j] * c[idj] * dx) for idj, j in enumerate(compartments)])
