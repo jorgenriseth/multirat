@@ -14,35 +14,38 @@ from dolfin import (
 )
 
 
+def smoothing_projection(u, V, bcs, h1_weight):
+    """Projects the function u onto a function space V with 
+    Dirichlet boundary conditions given by bcs with a weighted H1-norm 
+    (i.e.  a weight coefficient for the 1-st derivative on the norm in which
+    the minimization problem is solved."""
+    u_ = TrialFunction(V)
+    v = TestFunction(V)
+    u0_ = project(u, V)  # Projection of u onto V, without the bcs.
+    a0 = u_ * v * dx + h1_weight * inner(grad(u_), grad(v)) * dx
+    L0 = u0_ * v * dx + h1_weight * inner(grad(u0_), grad(v)) * dx
+    u1 = Function(V)
+    A = assemble(a0)
+    b = assemble(L0)
+    bcs.apply(A, b)
+    solve(A, u1.vector(), b)
+    return u1
+
 class BaseProjector:
     def project(self, expression, space):
         return project(expression, space)
 
 
 class DirichletProjector(BaseProjector):
-    def __init__(self, uD):
+    """"""
+    def __init__(self, uD, h1_weight):
         self.uD = uD
         self.bcs = DirichletBC()
+        self.a = h1_weight
 
-    def project(self, u0, V, norm="H1"):
+    def project(self, u0, V):
         bcs = DirichletBC(V, self.uD, "on_boundary")
-        if norm == "H1":
-            # Project u0 to have Dirichlet boundary equal to g0.
-            u = TrialFunction(V)
-            v = TestFunction(V)
-            u0_ = project(u0, V)
-            a0 = u * v * dx + inner(grad(u), grad(v)) * dx
-            L0 = u0_ * v * dx + inner(grad(u0_), grad(v)) * dx
-            u1 = Function(V)
-            A = assemble(a0)
-            b = assemble(L0)
-            bcs.apply(A, b)
-            solve(A, u1.vector(), b)
-            return u1
-        elif norm == "L2":
-            return project(u0, V, bcs=bcs)
-        raise ValueError(f"norm should be 'H1' or 'L2' got '{norm}'.")
-
+        return smoothing_projection(u0, V, bcs, self.a)
 
 class HomogeneousDirichletProjector(DirichletProjector):
     def __init__(self):

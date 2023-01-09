@@ -45,13 +45,13 @@ class VariationalBoundary(BoundaryData):
         return self.variational_boundary_form(trial, test, n, ds)
 
 
-class TractionBoundary(VariationalBoundary):
-    def __init__(self, value, idx: int, **kwargs):
+class NeumannBoundary(VariationalBoundary):
+    def __init__(self, value, idx, **kwargs):
         self.g = value
-        super().__init__("Traction", idx=idx, **kwargs)
+        super().__init__("Neumann", idx=idx, **kwargs)
 
     def variational_boundary_form(self, n, v, ds):
-        return inner(self.g * n, v) * ds(self.idx)
+        return inner(self.g, v) * ds(self.idx)
 
 
 class RobinBoundary(VariationalBoundary):

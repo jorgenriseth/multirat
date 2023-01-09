@@ -18,7 +18,7 @@ class ErrorComputer(BaseComputer):
         super().__init__({"errornorm": lambda c: multicomp_errornorm(c_expr, c, compartments, "H1")})
 
 
-def run_mms_solute_convergence():
+def run_mms_solute_convergence(Nmax=6):
     degree = 4
     subdomains = {
         1: CompiledSubDomain("near(x[0], -1)"),
@@ -26,8 +26,10 @@ def run_mms_solute_convergence():
         3: CompiledSubDomain("near(x[1], -1)"),
         4: CompiledSubDomain("near(x[1], 1)"),
     }
+    compartments = ["pvs_arteries", "pvs_capillaries", "pvs_veins"]
+    params = multicompartment_parameters(compartments)
+    # params = mms_parameters()
 
-    params = mms_parameters()
     phi, D, K, G, L = to_constant(
         params,
         "porosity",
@@ -37,15 +39,14 @@ def run_mms_solute_convergence():
         "diffusive_solute_transfer",
     )
     time = TimeKeeper(dt=0.1, endtime=1.0)
-    compartments = ["pa", "pc", "pv"]
 
     # Pressures in sympy format.
-    ap = {"pa": -1.0, "pc": -0.5, "pv": 0.8}
-    p0 = {"pa": 1.0, "pc": 0.5, "pv": 0.0}
+    ap = {"pvs_arteries": -1.0, "pvs_capillaries": -0.5, "pvs_veins": 0.8}
+    p0 = {"pvs_arteries": 1.0, "pvs_capillaries": 0.5, "pvs_veins": 0.0}
     p_sym = {j: mms_quadratic(ap[j], p0[j]) for j in compartments}
 
     # Concentrations in sympy format.
-    ac = {"pa": -1.0, "pc": -0.5, "pv": -0.2}
+    ac = {"pvs_arteries": -1.0, "pvs_capillaries": -0.5, "pvs_veins": -0.2}
     c = {j: mms_solute_quadratic(ac[j], T=time.endtime) for j in compartments}
 
     # Define solute sources and expressions for sympy represnetations.
@@ -58,7 +59,7 @@ def run_mms_solute_convergence():
 
     E = []
     hvec = []
-    for N in [3, 4, 5, 6]:
+    for N in range(1, Nmax+1):
         # Setup problem
         time.reset()
         domain = mms_domain(2 ** N, subdomains)
@@ -89,6 +90,8 @@ def run_mms_solute_convergence():
     plt.legend()
     plt.savefig(savepath / "convergence-concentration.png")
     plt.show()
+
+    return hvec, E 
 
 
 if __name__ == "__main__":
