@@ -5,6 +5,7 @@ import numpy as np
 from dolfin import *
 
 from multirat.boundary import process_boundary_forms, process_dirichlet
+from multirat.boundary_conditions import TracerODEBoundary
 from multirat.computers import BaseComputer
 from multirat.parameters import to_constant
 from multirat.timeseriesstorage import TimeSeriesStorage, DummyStorage
@@ -18,7 +19,9 @@ def pressure_variational_form(trial, test, compartments, K, G, source=None):
     q = test
     F = 0.0
     for idx_j, j in enumerate(compartments):
-        F += K[j] * inner(grad(p[idx_j]), grad(q[idx_j])) * dx
+        pj = p[idx_j]
+        qj = q[idx_j]
+        F += K[j] * inner(grad(pj), grad(qj)) * dx
         F -= (
             sum(
                 [
@@ -40,7 +43,7 @@ def solve_stationary(V: FunctionSpace, F: Form, bcs: List[DirichletBC], name: st
     P = Function(V, name=name)
     for bc in bcs:
         bc.apply(A, b)
-    solve(A, P.vector(), b)
+    solve(A, P.vector(), b, "cg", "hypre_amg")
     return P
 
 
@@ -175,15 +178,23 @@ def solve_solute(
     for _ in range(len(time) - 1):
         time.progress()
         print_progress(float(time), time.endtime)
-
+        update_ode_boundaries(boundaries, compartments, C0, time)
         C = solve_timestep(A, l, C, bcs)
         C0.assign(C)
         storage.write(C, float(time))
         computer.compute(time, C)
+                
     storage.close()
     visualize(storage, compartments)
     print()
     return C
+
+
+def update_ode_boundaries(boundaries, compartments, u0, time):
+    for idj, j in enumerate(compartments):
+        for bc in boundaries[j]:
+            if isinstance(bc, TracerODEBoundary):
+                bc.update(u0[idj], time)
 
 
 def compartment_mass_flux_density(cj, pj, Kj, phi_j, Dj):

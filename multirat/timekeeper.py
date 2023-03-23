@@ -1,6 +1,5 @@
 from dolfin import Constant
-from numpy import linspace, ceil
-
+import numpy as np
 
 class TimeKeeper(Constant):
     def __init__(self, dt, endtime):
@@ -14,14 +13,20 @@ class TimeKeeper(Constant):
         self.iter += 1
 
     def is_valid(self):
-        return float(self.t) <= self.endtime
+        return float(self) <= self.endtime
 
     def reset(self):
         self.assign(0.0)
         self.iter = 0
 
     def get_vector(self):
-        return linspace(0, (len(self) - 1) * self.dt, len(self))
+        return np.linspace(0, (len(self) - 1) * self.dt, len(self))
 
     def __len__(self):
-        return int(ceil(self.endtime / self.dt) + 1)
+        return int(np.ceil(self.endtime / self.dt) + 1)
+    
+    def __iter__(self):
+        self.reset()
+        for _ in range(len(self)-1):
+            self.progress()
+            yield self

@@ -32,3 +32,4 @@ def assign_mixed_function(p, V, compartments):
     assigner = FunctionAssigner(V, subspaces)
     assigner.assign(P, Pint)
     return P
+

@@ -3,7 +3,6 @@ from numpy import zeros
 
 class BaseComputer:
     """Class to perform basic computations during simulation of diffusion equation."""
-
     def __init__(self, function_dict):
         self.functions = function_dict
         self.initiated = False

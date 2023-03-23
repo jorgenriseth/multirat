@@ -144,7 +144,7 @@ def xdmf2hdf(xdmfdir, hdf5file):
     with XDMFFile(str(dirpath / "boundaries.xdmf")) as boundaryfile:
         boundaryfile.read(bdrycollection, "boundaries")
     boundaries = MeshFunction("size_t", mesh, bdrycollection)
-    meshfunction_default_value(boundaries, 0)
+    meshfunction_default_value(boundaries, 0) # With 0 
 
     # Write all files into a single h5-file.
     with HDF5File(mesh.mpi_comm(), str(hdf5file), "w") as f:

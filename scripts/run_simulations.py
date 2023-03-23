@@ -1,12 +1,14 @@
+"""Script for running ECS pure diffusion simulations."""
 import time as pytime
 
-import matplotlib.pyplot as plt
-import numpy as np
-from dolfin import *
+from dolfin import FunctionSpace
 
-import multirat.base.projectors as projectors
-from multirat import *
-from multirat.parameters import PARAMS
+from multirat.config import MESH_DIR, RESULTS_DIR
+from multirat.expressions import gaussian_expression
+from multirat.problems import HomogeneousProblem, TracerConservationProblem, TracerDecayProblem
+from multirat.meshprocessing import hdf2fenics
+from multirat.projectors import HomogeneousDirichletProjector
+from multirat.timekeeper import TimeKeeper
 
 ENDTIME = 3600.0 * 6.0
 resolutions = [8, 16, 32, 64]
@@ -31,6 +33,7 @@ def ratbrain_diffusion(
     std=PARAMS["injection_spread"],
     degree=1,
 ):
+    """Run single-compartment diffusion simulation."""
     # Load functionspace and domain
     domain = hdf2fenics(meshfile, pack=True)
     V = FunctionSpace(domain.mesh, "CG", degree)
