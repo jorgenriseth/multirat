@@ -477,6 +477,8 @@ def get_arterial_inflow(params):
 
 def compute_parameters(params):
     return {
+        # "csf_volume": params["csf_volume_fraction"] * params["brain_volume"],
+        # "csf_renewal_rate": params["csf_renewal_rate"],
         "permeability": get_permeabilities(params),
         "viscosity": params["viscosity"],
         "porosity": get_porosities(params),
