@@ -9,17 +9,9 @@ from dolfin import inner, grad
 
 import pantarei as pr
 from pantarei import solvers
-from pantarei import projectors
 from pantarei import meshprocessing
-from pantarei import utils
-from pantarei.boundary import (
-    process_boundary_forms,
-    process_dirichlet,
-    BoundaryData,
-    DirichletBoundary,
-)
+from pantarei.boundary import process_boundary_forms, BoundaryData, DirichletBoundary
 from pantarei.computers import BaseComputer
-from pantarei.mms import MMSDomain
 from pantarei.timekeeper import TimeKeeper
 from pantarei.fenicsstorage import FenicsStorage
 
@@ -30,6 +22,9 @@ from multirat.boundary_conditions import (
 )
 from multirat.initial_conditions import gaussian_expression
 from multirat.parameters import multicompartment_parameters
+
+
+AbstractForm = pr.forms.AbstractForm
 
 
 logger = logging.getLogger(__name__)
@@ -48,58 +43,54 @@ def compartment_pressure_form(idx_j, p, q, K, gamma, compartments):
     return K[j] * inner(grad(p[idx_j]), grad(q[idx_j])) - sj_q
 
 
-def multicompartment_pressure_form(compartments):
-    class MulticompartmentPressure:
-        @staticmethod
-        def create_fem_form(
-            V: df.FunctionSpace,
-            coefficients: Dict[str, ufl.Coefficient],
-            boundaries: Dict[int, List[BoundaryData]],
-        ) -> df.Form:
-            dx = df.Measure("dx", domain=V.mesh())
-            p = df.TrialFunction(V)
-            q = df.TestFunction(V)
-            K = coefficients["hydraulic_conductivity"]
-            gamma = coefficients["convective_fluid_transfer"]
-            return sum(
-                [
-                    compartment_pressure_form(idx_j, p, q, K, gamma, compartments)
-                    for idx_j, j in enumerate(compartments)
-                ]
-            ) * dx + process_boundary_forms(p, q, V.mesh(), boundaries)
+def multicompartment_pressure_form(compartments: List[str]) -> AbstractForm:
+    def create_fem_form(
+        V: df.FunctionSpace,
+        coefficients: Dict[str, ufl.Coefficient],
+        boundaries: Dict[int, List[BoundaryData]],
+    ) -> df.Form:
+        dx = df.Measure("dx", domain=V.mesh())
+        p = df.TrialFunction(V)
+        q = df.TestFunction(V)
+        K = coefficients["hydraulic_conductivity"]
+        gamma = coefficients["convective_fluid_transfer"]
+        return sum(
+            [
+                compartment_pressure_form(idx_j, p, q, K, gamma, compartments)
+                for idx_j, j in enumerate(compartments)
+            ]
+        ) * dx + process_boundary_forms(p, q, V.mesh(), boundaries)
 
-    return MulticompartmentPressure
+    return create_fem_form
 
 
-def multicompartment_solute_form(compartments):
-    class MulticompartmentConcentration:
-        @staticmethod
-        def create_fem_form(
-            V: df.FunctionSpace,
-            coefficients: Dict[str, Any],
-            boundaries: List[BoundaryData],
-        ) -> df.Form:
-            dx = df.Measure("dx", domain=V.mesh())
-            u = df.TrialFunction(V)
-            v = df.TestFunction(V)
-            L = coefficients["diffusive_solute_transfer"]
-            G = coefficients["convective_solute_transfer"]
-            p = coefficients["pressure"]
-            phi = coefficients["porosity"]
-            dt = coefficients["dt"]
-            u0 = coefficients["u0"]
-            D = coefficients["effective_diffusion"]
-            K = coefficients["hydraulic_conductivity"]
-            return sum(
-                [
-                    compartment_concentration_form(
-                        idx_j, u, v, u0, L, G, p, phi, dt, D, K, compartments
-                    )
-                    for idx_j, j in enumerate(compartments)
-                ]
-            ) * dx + dt * process_boundary_forms(u, v, V.mesh(), boundaries)
+def multicompartment_solute_form(compartments: List[str]) -> AbstractForm:
+    def create_fem_form(
+        V: df.FunctionSpace,
+        coefficients: Dict[str, Any],
+        boundaries: List[BoundaryData],
+    ) -> df.Form:
+        dx = df.Measure("dx", domain=V.mesh())
+        u = df.TrialFunction(V)
+        v = df.TestFunction(V)
+        L = coefficients["diffusive_solute_transfer"]
+        G = coefficients["convective_solute_transfer"]
+        p = coefficients["pressure"]
+        phi = coefficients["porosity"]
+        dt = coefficients["dt"]
+        u0 = coefficients["u0"]
+        D = coefficients["effective_diffusion"]
+        K = coefficients["hydraulic_conductivity"]
+        return sum(
+            [
+                compartment_concentration_form(
+                    idx_j, u, v, u0, L, G, p, phi, dt, D, K, compartments
+                )
+                for idx_j, j in enumerate(compartments)
+            ]
+        ) * dx + dt * process_boundary_forms(u, v, V.mesh(), boundaries)
 
-    return MulticompartmentConcentration
+    return create_fem_form
 
 
 def compartment_concentration_form(
@@ -161,18 +152,24 @@ def solve_pressure_problem(domain, compartments, coefficients):
 
 def injection(compartments, center, std, phi, **kwargs):
     porosity_total = sum([phi[compartment] for compartment in compartments])
+
     def load_initial_condition(V, boundaries):
         u0 = {}
         for idx, compartment in enumerate(compartments):
             u0_ = gaussian_expression(center=center, std=std, **kwargs)
             u0_ = df.project(u0_, V.sub(idx).collapse())
-            bcs = [df.DirichletBC(V.sub(idx).collapse(), boundaries[idx].bc.uD, "on_boundary")]
+            bcs = [
+                df.DirichletBC(
+                    V.sub(idx).collapse(), boundaries[idx].bc.uD, "on_boundary"
+                )
+            ]
             u0_ = pr.projectors.smoothing_projector(0.1)(
                 u0_, V.sub(idx).collapse(), bcs
             )
             u0_ = pr.utils.rescale_function(u0_, 1.0 / porosity_total)
             u0[compartment] = u0_
         return pr.utils.assign_mixed_function(u0, V, compartments)
+
     return load_initial_condition
 
 
@@ -180,18 +177,20 @@ def ecs_injection(compartments, center, std, phi, **kwargs):
     def load_initial_condition(V, boundaries):
         u = {
             "ecs": gaussian_expression(center=center, std=std, **kwargs),
-            **{compartment: df.Constant(0.0) for compartment in compartments
-               if compartment != "ecs"},
+            **{
+                compartment: df.Constant(0.0)
+                for compartment in compartments
+                if compartment != "ecs"
+            },
         }
         bcs = pr.boundary.process_dirichlet(V, V.mesh(), boundaries)
         U = pr.projectors.mixed_space_projector(
-            compartments,
-            pr.projectors.smoothing_projector(0.1)
+            compartments, pr.projectors.smoothing_projector(0.05)
         )(u, V, bcs)
         pr.utils.rescale_function(U.sub(0), 1.0 / phi["ecs"])
         return U
-    return load_initial_condition
 
+    return load_initial_condition
 
 
 def solve_concentration_problem(
@@ -228,7 +227,6 @@ def solve_concentration_problem(
             * float(coefficients["sas_concentration"]),
         }
     )
-
     stationary_solver = solvers.StationaryProblemSolver("lu", "none")
     time.reset()
     results = solvers.solve_time_dependent(
@@ -237,7 +235,9 @@ def solve_concentration_problem(
         coefficients=coefficients,
         form=solute_form,
         boundaries=boundaries,
-        initial_condition=ecs_injection(compartments, [3.0, 3.0, 3.0], 1.0, phi, degree=2),
+        initial_condition=ecs_injection(
+            compartments, [3.0, 3.0, 3.0], 1.0, phi, degree=2
+        ),
         time=time,
         solver=TracerODEProblemSolver(
             stationary_solver, coefficients["sas_concentration"]
@@ -254,9 +254,10 @@ def multicompartment_model(
     meshdir: Path,
     resolution: int,
     bdry_type: str,
-    compartments: List[str] = ["ecs", "pvs_arteries", "pvs_veins"],
-    timestep: float = 60.0,
-    endtime: float = 3600.0 * 6.0,
+    compartments: List[str], 
+    timestep: float,
+    endtime: float,
+    results_path: Path,
     parameter_loader: Callable[..., Dict[str, Any]] = multicompartment_parameters,
 ):
     domain = load_mesh(Path(meshdir), resolution)
@@ -290,12 +291,7 @@ def multicompartment_model(
 
     logging.info("Solving concentration problem")
     results = solve_concentration_problem(
-        domain,
-        coefficients,
-        compartments,
-        bdry_data,
-        time,
-        store,
+        domain, coefficients, compartments, bdry_data, time, store
     )
     store.close()
 
@@ -319,22 +315,64 @@ def setup_sas_concentration(bdry_type: str, domain, compartments, coefficients, 
 
 
 if __name__ == "__main__":
-    import time
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--meshdir",
+        help="Mesh directory"
+    )
+    parser.add_argument("--resolution", type=int, help="Mesh resolution")
+    parser.add_argument(
+        "--bdry", help="Boundary type (homogeneous, conservation, decay)"
+    )
+    parser.add_argument("--timestep", type=float, default=60.0, help="Timestep")
+    parser.add_argument("--endtime", type=float, default=3600.0 * 60.0, help="Timestep")
+    parser.add_argument("--ncomp", type=int, default=3, help="Number of compartments")
+    parser.add_argument("--resultprefix", help="Prefix for result files", default="multicompartment")
+    args = parser.parse_args()
 
+    if args.ncomp == 3:
+        compartments = ["ecs", "pvs_arteries", "pvs_veins"]
+    elif args.ncomp == 4:
+        compartments = ["ecs", "pvs_arteries", "pvs_capillaries", "pvs_veins"]
+    elif args.ncomp == 7:
+        compartments = ["ecs", "pvs_arteries", "pvs_capillaries", "pvs_veins", "arteries", "capillaries", "veins"]
+    else:
+        raise ValueError(f"Nonstandard number of compartments: {args.ncomp}")
+
+    results_path = Path(
+        f"results/{args.resultprefix}-{args.resolution}-{args.ncomp}comp-{args.bdry}"
+    )
+    results_path.mkdir(parents=True, exist_ok=True)
+    import time
     tic = time.time()
     results = multicompartment_model(
-        "mesh",
-        32,
-        "homogeneous",
-        timestep=60.0,
-        endtime=360.0,  # 3600.0 * 6.0
+        meshdir=args.meshdir,
+        resolution=args.resolution,
+        bdry_type=args.bdry,
+        compartments=compartments,
+        timestep=args.timestep,
+        endtime=args.endtime,
+        results_path=results_path,
     )
     toc = time.time()
     print()
     print(f"Elapsed time: {toc - tic:.2f} s")
+    
     if df.MPI.comm_world.rank == 0:
         import matplotlib.pyplot as plt
-
+        import numpy as np
+        times = TimeKeeper(args.timestep, args.endtime).as_vector()
+        X = np.zeros((len(times), len(results.values)+1))
+        X[:, 0] = times
+        for i, values in enumerate(results.values.values()):
+            X[:, i+1] = values
+        np.savetxt(
+            results_path / "computed.txt",
+            X,
+            delimiter=" ",
+            header=" ".join(["times", *results.values.keys()])
+        )
         total_mass = sum(
             results[f"mass_{j}"] for j in ["ecs", "pvs_arteries", "pvs_veins"]
         )

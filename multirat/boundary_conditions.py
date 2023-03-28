@@ -29,18 +29,15 @@ class ConservedSASConcentration(df.Constant, SASConcentration):
         self.Vcsf = coefficients["csf_volume_fraction"] * df.assemble(
             1.0 * df.Measure("dx", domain=domain)
         )
+        self.has_init = False
 
     def update(self, u0):
-        q = total_flux_density(
-            u0, self.coefficients["pressure"], self.coefficients, self.compartments
-        )
-        Q = df.assemble(inner(q, self.n) * self.ds)
-        self.assign(self + self.time.dt / self.Vcsf * Q)
-
-        # phi = self.coefficients["porosity"]
-        # N0 = 1.0
-        # content = total_brain_content(u0, phi, self.compartments)
-        # self.assign((N0 - content) + self.time.dt / self.Vcsf * Q)
+        if not self.has_init:
+            self.N0 = total_brain_content(u0, self.coefficients["porosity"], self.compartments)
+            self.has_init=True
+        Q = total_flux(u0, self.coefficients, self.compartments, self.n, self.ds)
+        Nnow = total_brain_content(u0, self.coefficients["porosity"], self.compartments)
+        self.assign((self.N0 - Nnow + self.time.dt * Q) / self.Vcsf)
 
 
 class DecayingSASConcentration(df.Constant, SASConcentration):
@@ -57,30 +54,26 @@ class DecayingSASConcentration(df.Constant, SASConcentration):
         )
 
     def update(self, u0):
-        q = total_flux_density(
-            u0, self.coefficients["pressure"], self.coefficients, self.compartments
-        )
-        Q = df.assemble(inner(q, self.n) * self.ds)
+        Q = total_flux(u0, self.coefficients, self.compartments, self.n, self.ds)
         self.assign(
             df.exp(-self.decay * self.time.dt) * (self + self.time.dt / self.Vcsf * Q)
         )
 
 
 def compartment_flux_density(Dj, cj, Kj, phi_j, pj):
-    return -Dj * grad(cj) - Kj / phi_j * cj * grad(pj)
+    return -phi_j * Dj * grad(cj) - Kj * cj * grad(pj)
 
 
-def total_flux_density(C, P, coefficients, compartments):
-    D, K, phi = (
-        coefficients[param]
-        for param in ["effective_diffusion", "hydraulic_conductivity", "porosity"]
-    )
-    return sum(
-        [
-            phi[j] * compartment_flux_density(D[j], C[idx_j], K[j], phi[j], P[idx_j])
-            for idx_j, j in enumerate(compartments)
-        ]
-    )
+def total_flux(C, coefficients, compartments, n, ds):
+    Q = 0.0
+    for idx, j in enumerate(compartments):
+        phi_j = coefficients["porosity"][j]
+        Dj = coefficients["effective_diffusion"][j]
+        Kj = coefficients["hydraulic_conductivity"][j]
+        pj = coefficients["pressure"].sub(idx)
+        qj = compartment_flux_density(Dj, C.sub(idx), Kj, phi_j, pj)
+        Q += df.assemble(inner(qj, n) * ds)
+    return Q
 
 
 def total_brain_content(u0, phi, compartments):
