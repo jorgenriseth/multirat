@@ -4,7 +4,7 @@ from pathlib import Path
 
 import SVMTK
 
-from multirat.base.meshprocessing import stl2hdf
+from multirat.meshprocessing import stl2hdf
 
 parser = ArgumentParser(
     description="""

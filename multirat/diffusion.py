@@ -1,6 +1,6 @@
 from multirat.computers import BaseComputer
 from multirat.problems import BaseDiffusionProblem
-from multirat.timeseriesstorage import TimeSeriesStorage
+from pantarei.fenicsstorage import FenicsStorage
 
 
 def print_progress(time):
@@ -13,22 +13,17 @@ def print_progress(time):
 def solve_diffusion_problem(problem: BaseDiffusionProblem, results_path, computer=None):
     if computer is None:
         computer = BaseComputer({})
-
     problem.init_solver()
-    storage = TimeSeriesStorage("w", results_path, mesh=problem.domain.mesh, V=problem.V)
+    storage = FenicsStorage(results_path, "w")
     storage.write(problem.u, problem.time.t)
     computer.initiate(problem)
-
     problem.time.progress()
     while problem.time.is_valid():
         print_progress(problem.time)
-
         problem.pre_solve()  # Possible updates to be performed before solving the system.
         problem.solve()
-
         storage.write(problem.u, problem.time.t)
         computer.compute(problem)
-
         problem.post_solve()
         problem.time.progress()
 

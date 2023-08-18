@@ -8,12 +8,8 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.8"
 pantarei = { git="https://github.com/jorgenriseth/pantarei.git", develop=true}
-Pint = "^0.19.2"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.black]
-line-length = 110
